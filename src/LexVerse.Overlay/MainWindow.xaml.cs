@@ -7,12 +7,13 @@ namespace LexVerse.Overlay
 {
     public partial class MainWindow : Window
     {
-        private readonly OverlayDemo _demo = new OverlayDemo();
+        private readonly ViewModels.OverlayViewModel _viewModel = new ViewModels.OverlayViewModel();
 
         public MainWindow()
         {
             InitializeComponent();
-            DataContext = _demo;
+
+            DataContext = _viewModel;
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)

@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:LexVerse.Overlay"
+        xmlns:converters="clr-namespace:LexVerse.Overlay.Converters"
         mc:Ignorable="d"
         Title="LexVerse Overlay"
         WindowStyle="None"
@@ -15,6 +16,13 @@
         Loaded="Window_Loaded"
         Height="600"
         Width="800">
+    <Window.Resources>
+        <converters:BoolToTextWrappingConverter x:Key="BoolToWrap"/>
+        <DropShadowEffect x:Key="DropShadow"
+                Color="Black"
+                BlurRadius="6"
+                Opacity="0.6"/>
+    </Window.Resources>
 
     <Grid>
         <ItemsControl ItemsSource="{Binding Items}">
@@ -25,10 +33,17 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                    <TextBlock Text="{Binding Text}"
-                            FontSize="{Binding FontSize}"
-                            Foreground="White"
-                            FontWeight="Bold"/>
+                    <Border Background="{Binding Background, FallbackValue=#80000000}"
+                            Padding="6"
+                            CornerRadius="6">
+                        <TextBlock Text="{Binding Text}"
+                                   FontSize="{Binding FontSize}"
+                                   Foreground="{Binding Foreground, FallbackValue=White}"
+                                   FontWeight="Bold"
+                                   TextWrapping="{Binding Wrap, Converter={StaticResource BoolToWrap}}"
+                                   MaxWidth="{Binding MaxWidth}"
+                                   Effect="{StaticResource DropShadow}"/>
+                    </Border>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
             <ItemsControl.ItemContainerStyle>

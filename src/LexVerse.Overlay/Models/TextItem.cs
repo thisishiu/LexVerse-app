@@ -34,6 +34,11 @@ namespace LexVerse.Overlay.Models
             set { _fontSize = value; OnPropertyChanged(); }
         }
 
+        public double MaxWidth { get; set; } = 600;
+        public bool Wrap { get; set; } = true;
+        public string? Background { get; set; }
+        public string? Foreground { get; set; }
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         private void OnPropertyChanged([CallerMemberName] string? propName = null)
