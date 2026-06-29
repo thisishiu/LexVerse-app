@@ -72,8 +72,7 @@
                 <CheckBox x:Name="BlackOverlayBlocksBox"
                           Margin="0,0,24,0"
                           VerticalAlignment="Center"
-                          IsChecked="True"
-                          Content="Black blocks"/>
+                          Content="Dark blocks"/>
                 <TextBlock VerticalAlignment="Center" Text="Font"/>
                 <Button x:Name="DecreaseFontSizeButton"
                         Width="30"

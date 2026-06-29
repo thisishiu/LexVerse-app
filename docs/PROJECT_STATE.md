@@ -151,10 +151,23 @@ Use the smallest meaningful verification:
 - Verification after merge: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore` passed with 0 warnings and 0 errors.
 - Git caveat: `feature/pipeline-integration` is ahead of `origin/feature/pipeline-integration` locally and still needs to be pushed if the merge should be shared.
 
+### 2026-06-29 Overlay Visibility, Alignment, And Speed Follow-up
+
+- Pulled `feature/pipeline-integration`; remote was already up to date.
+- Changed the pipeline sample overlay default back to white blocks with black text; the optional toggle is labeled `Dark blocks` and uses a softer dark gray instead of pure black.
+- Added a 50 ms foreground visibility timer in `samples/LexVerse.Pipeline.Sample` so overlay text boxes hide quickly when the selected HWND is minimized or is no longer the foreground/root-owner window, even before the next OCR pipeline iteration.
+- Changed app/window overlay behavior to fail closed when the picker source cannot be matched to a visible HWND; `Start` stays disabled because the app cannot guarantee overlay isolation without an HWND.
+- Reduced document-mode OCR interval from 450 ms to 250 ms to improve demo responsiveness when capture/OCR/translation are fast enough.
+- Removed the manual up-left overlay block offset so translated boxes start at the OCR target rect instead of being shifted by padding.
+- Updated `LexVerse.Overlay.MainWindow` and `PhysicalPixelToDipConverter` so source physical bounds are converted with the source frame DPI and the overlay HWND is positioned with physical pixel bounds. This should reduce overlay drift on non-100% DPI or mixed-monitor setups.
+- Marked matched HWND capture sources as `CaptureSourceKind.Window` instead of generic `Picker` for clearer source metadata.
+- Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore` passed outside sandbox with 0 warnings and 0 errors.
+- Caveat: manual visual verification is still recommended: select a document app, minimize it, confirm the overlay hides immediately, restore it, and confirm OCR/overlay positions align with the source text.
+
 ## Next Recommended Work
 
-1. Manually run `samples/LexVerse.Pipeline.Sample`, pick a document app, and confirm translated OCR blocks render as black boxes with white text.
-2. Toggle `Black blocks` off/on while the pipeline is running and confirm both palettes remain readable and aligned.
+1. Manually run `samples/LexVerse.Pipeline.Sample`, pick a document app, and confirm translated OCR blocks render as white boxes with black text by default.
+2. Toggle `Dark blocks` off/on while the pipeline is running and confirm both palettes remain readable and aligned.
 3. Use the overlay font `-` and `+` controls while the pipeline is running and confirm the active overlay text resizes without drifting away from OCR boxes.
 4. While the pipeline is running, open another app over the selected app and confirm the overlay hides; return focus to the selected app and confirm it reappears in the selected app bounds.
 5. Push `feature/pipeline-integration` to `origin` when the merged overlay changes are ready to share.

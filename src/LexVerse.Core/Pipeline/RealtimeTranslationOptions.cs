@@ -34,7 +34,7 @@ public sealed record RealtimeTranslationOptions(
         OcrProcessingMode.Document,
         "auto",
         "vi",
-        TimeSpan.FromMilliseconds(450))
+        TimeSpan.FromMilliseconds(250))
     {
         MaxParallelTranslationRequests = 3,
         MaxTranslationBatchSize = 16

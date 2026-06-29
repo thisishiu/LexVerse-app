@@ -6,23 +6,39 @@ namespace LexVerse.Overlay;
 
 public sealed class PhysicalPixelToDipConverter
 {
-    private readonly Visual _visual;
     private readonly ScreenPoint _origin;
+    private readonly double _dpiScaleX;
+    private readonly double _dpiScaleY;
 
     public PhysicalPixelToDipConverter(Visual visual, ScreenPoint origin)
+        : this(origin, GetDpi(visual).DpiScaleX, GetDpi(visual).DpiScaleY)
     {
-        _visual = visual ?? throw new ArgumentNullException(nameof(visual));
+    }
+
+    public PhysicalPixelToDipConverter(ScreenPoint origin, double dpiScaleX, double dpiScaleY)
+    {
+        if (dpiScaleX <= 0 || dpiScaleY <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(dpiScaleX), "DPI scale must be greater than zero.");
+        }
+
         _origin = origin;
+        _dpiScaleX = dpiScaleX;
+        _dpiScaleY = dpiScaleY;
     }
 
     public Rect ToLocalDip(ScreenRect physicalRect)
     {
-        var dpi = VisualTreeHelper.GetDpi(_visual);
-
         return new Rect(
-            (physicalRect.X - _origin.X) / dpi.DpiScaleX,
-            (physicalRect.Y - _origin.Y) / dpi.DpiScaleY,
-            physicalRect.Width / dpi.DpiScaleX,
-            physicalRect.Height / dpi.DpiScaleY);
+            (physicalRect.X - _origin.X) / _dpiScaleX,
+            (physicalRect.Y - _origin.Y) / _dpiScaleY,
+            physicalRect.Width / _dpiScaleX,
+            physicalRect.Height / _dpiScaleY);
+    }
+
+    private static DpiScale GetDpi(Visual visual)
+    {
+        ArgumentNullException.ThrowIfNull(visual);
+        return VisualTreeHelper.GetDpi(visual);
     }
 }

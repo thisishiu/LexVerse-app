@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using LexVerse.Core.Capture;
 using LexVerse.Core.Geometry;
 using LexVerse.Core.Pipeline;
@@ -26,7 +27,7 @@ public partial class MainWindow : Window
     private const double OverlayVerticalPadding = 2;
     private const string LightBlockBackground = "White";
     private const string LightBlockForeground = "Black";
-    private const string DarkBlockBackground = "Black";
+    private const string DarkBlockBackground = "#1F2937";
     private const string DarkBlockForeground = "White";
     private const double MinBaseOverlayFontSize = 12;
     private const double MaxBaseOverlayFontSize = 28;
@@ -46,11 +47,17 @@ public partial class MainWindow : Window
     private OverlayWindow? _overlayWindow;
     private CancellationTokenSource? _pipelineCancellation;
     private RealtimeTranslationPipelineResult? _lastOverlayResult;
+    private readonly DispatcherTimer _overlayVisibilityTimer;
     private double _overlayFontScale = 1;
 
     public MainWindow()
     {
         InitializeComponent();
+        _overlayVisibilityTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(50)
+        };
+        _overlayVisibilityTimer.Tick += OverlayVisibilityTimer_Tick;
         UpdateFontSizeControls();
     }
 
@@ -80,7 +87,7 @@ public partial class MainWindow : Window
             _useMatchedWindowCaptureItem = binding.UseMatchedWindowCaptureItem;
 
             StatusText.Text = $"Selected: {_captureItem.DisplayName}. {binding.Status}";
-            StartButton.IsEnabled = true;
+            StartButton.IsEnabled = binding.SourceInfo.Hwnd is { } hwnd && hwnd != IntPtr.Zero;
         }
         catch (Exception ex)
         {
@@ -111,6 +118,7 @@ public partial class MainWindow : Window
                 _captureSourceInfo);
             _overlayWindow = new OverlayWindow(_overlayItems);
             _overlayWindow.Show();
+            _overlayVisibilityTimer.Start();
             _pipelineCancellation = new CancellationTokenSource();
 
             PickButton.IsEnabled = false;
@@ -167,6 +175,26 @@ public partial class MainWindow : Window
         FontSizeScaleText.Text = $"{_overlayFontScale * 100:0}%";
         DecreaseFontSizeButton.IsEnabled = _overlayFontScale > MinOverlayFontScale + 0.001;
         IncreaseFontSizeButton.IsEnabled = _overlayFontScale < MaxOverlayFontScale - 0.001;
+    }
+
+    private void OverlayVisibilityTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_overlayWindow is null)
+        {
+            return;
+        }
+
+        if (!ShouldShowOverlayOnSelectedSource())
+        {
+            _overlayItems.Clear();
+            _overlayWindow.Hide();
+            return;
+        }
+
+        if (!_overlayWindow.IsVisible && _lastOverlayResult is not null)
+        {
+            UpdateOverlay(_lastOverlayResult);
+        }
     }
 
     private async Task RunPipelineLoopAsync(CancellationToken cancellationToken)
@@ -322,7 +350,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        _overlayWindow.SetPhysicalBounds(result.Ocr.Frame.Geometry.SourceScreenRect);
+        _overlayWindow.SetPhysicalBounds(
+            result.Ocr.Frame.Geometry.SourceScreenRect,
+            result.Ocr.Frame.Geometry.DpiScaleX,
+            result.Ocr.Frame.Geometry.DpiScaleY);
         if (!_overlayWindow.IsVisible)
         {
             _overlayWindow.Show();
@@ -338,8 +369,8 @@ public partial class MainWindow : Window
             var targetRect = _overlayWindow.ScreenPhysicalToLocalDip(item.TargetRect);
             var x = targetRect.X;
             var y = targetRect.Y;
-            var paddedX = Math.Max(0, x - OverlayHorizontalPadding);
-            var paddedY = Math.Max(0, y - OverlayVerticalPadding);
+            var paddedX = Math.Max(0, x);
+            var paddedY = Math.Max(0, y);
             var width = Math.Max(24, targetRect.Width);
             var minHeight = Math.Max(18, targetRect.Height);
             var maxWidth = Math.Max(24, _overlayWindow.ActualWidth - paddedX);
@@ -380,7 +411,7 @@ public partial class MainWindow : Window
     {
         if (_captureSourceInfo?.Hwnd is not { } hwnd || hwnd == IntPtr.Zero)
         {
-            return true;
+            return false;
         }
 
         try
@@ -388,6 +419,8 @@ public partial class MainWindow : Window
             var snapshot = _selectedWindowTracker.GetSnapshot(hwnd);
             return snapshot.IsVisible
                 && !snapshot.IsMinimized
+                && snapshot.WindowRect.Width > 0
+                && snapshot.WindowRect.Height > 0
                 && IsForegroundWindowOrRoot(hwnd);
         }
         catch
@@ -404,7 +437,9 @@ public partial class MainWindow : Window
             return false;
         }
 
-        return foreground == hwnd || GetAncestor(foreground, GA_ROOT) == hwnd;
+        return foreground == hwnd
+            || GetAncestor(foreground, GA_ROOT) == hwnd
+            || GetAncestor(foreground, GA_ROOTOWNER) == hwnd;
     }
 
     private double CalculateOverlayFontSize(
@@ -449,7 +484,7 @@ public partial class MainWindow : Window
             return new CaptureBinding(
                 null,
                 new CaptureSourceInfo(CaptureSourceKind.Picker, item.DisplayName),
-                "Could not infer screen bounds; overlay may be offset.",
+                "Could not match this source to a visible app window; overlay disabled.",
                 false);
         }
 
@@ -470,7 +505,7 @@ public partial class MainWindow : Window
 
         return new CaptureBinding(
             geometryProvider,
-            new CaptureSourceInfo(CaptureSourceKind.Picker, item.DisplayName, hwnd),
+            new CaptureSourceInfo(CaptureSourceKind.Window, item.DisplayName, hwnd),
             $"Using window bounds from {best.Candidate.ProcessName ?? "unknown"}.",
             best.HasTitleMatch);
     }
@@ -561,6 +596,7 @@ public partial class MainWindow : Window
         _pipelineCancellation?.Cancel();
         _pipelineCancellation?.Dispose();
         _pipelineCancellation = null;
+        _overlayVisibilityTimer.Stop();
 
         if (_captureSession is not null)
         {
@@ -585,6 +621,7 @@ public partial class MainWindow : Window
     }
 
     private const uint GA_ROOT = 2;
+    private const uint GA_ROOTOWNER = 3;
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
