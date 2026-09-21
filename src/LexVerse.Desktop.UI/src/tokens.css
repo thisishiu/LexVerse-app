@@ -1,0 +1,16 @@
+:root {
+  --ink: #0f100e;
+  --ink-raised: #171915;
+  --paper: #eee5d3;
+  --paper-muted: #b8b09f;
+  --rule: #34372f;
+  --amber: #efb84d;
+  --amber-deep: #5b461e;
+  --sage: #88b69a;
+  --vermilion: #e56b4f;
+  --radius-small: 8px;
+  --radius-medium: 14px;
+  --radius-large: 22px;
+  --motion-fast: 140ms;
+  --motion-normal: 180ms;
+}

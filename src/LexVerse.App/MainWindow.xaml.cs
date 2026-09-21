@@ -65,6 +65,7 @@ public partial class MainWindow : Window
         _commerce = commerce;
         _privacyPreferences = privacyPreferences;
         InitializeComponent();
+        InitializeHybridUiHost();
         ApplyPrivacyPreferences(_privacyPreferences.Current);
         ModuleCountText.Text = $"{modules.Modules.Count} module registered by the composition root";
         _realtimeModule.Coordinator.StateChanged += RealtimeCoordinator_StateChanged;
@@ -77,6 +78,7 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         Loaded -= MainWindow_Loaded;
+        _ = InitializeWebUiAsync();
         try
         {
             await _commerce.InitializeAsync();
@@ -108,6 +110,8 @@ public partial class MainWindow : Window
         {
             _isUpdatingPrivacyUi = false;
         }
+
+        PublishDesktopSnapshot();
     }
 
     private async void PrivacySetting_Changed(object sender, RoutedEventArgs e)
@@ -216,6 +220,7 @@ public partial class MainWindow : Window
         RestoreButton.IsEnabled = !busy && signedIn;
         OfferBox.IsEnabled = !busy && OfferBox.Items.Count > 0;
         BuyButton.IsEnabled = !busy && signedIn && OfferBox.SelectedItem is not null;
+        PublishDesktopSnapshot();
     }
 
     private async void SignIn_Click(object sender, RoutedEventArgs e) =>
@@ -287,6 +292,7 @@ public partial class MainWindow : Window
             remoteProcessingAllowed && _regionAccessAllowed
                 ? "SuccessBrush"
                 : "AccentBrush");
+        PublishDesktopSnapshot();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -304,7 +310,10 @@ public partial class MainWindow : Window
             : "F6 is used by another app. Quick text remains available.";
     }
 
-    private async void TranslateQuickText_Click(object sender, RoutedEventArgs e)
+    private async void TranslateQuickText_Click(object sender, RoutedEventArgs e) =>
+        await TranslateQuickTextAsync();
+
+    private async Task TranslateQuickTextAsync()
     {
         var text = QuickTextBox.Text;
         if (string.IsNullOrWhiteSpace(text))
@@ -316,7 +325,8 @@ public partial class MainWindow : Window
 
         await RunPopupAsync(
             token => _popupModule.UseCase.TranslateTextAsync(text, CreateRequest(), token),
-            "Translating quick text…");
+            "Translating quick text…",
+            translation => _lastQuickTranslation = translation);
     }
 
     private void MinimizeForHotkey_Click(object sender, RoutedEventArgs e)
@@ -325,7 +335,10 @@ public partial class MainWindow : Window
         StatusText.Text = "Highlight text in another app and press F6.";
     }
 
-    private async void StartRegionRealtime_Click(object sender, RoutedEventArgs e)
+    private async void StartRegionRealtime_Click(object sender, RoutedEventArgs e) =>
+        await StartRegionRealtimeAsync();
+
+    private async Task StartRegionRealtimeAsync()
     {
         if (_isSelectingRegion)
         {
@@ -361,7 +374,10 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void StartFullScreenRealtime_Click(object sender, RoutedEventArgs e)
+    private async void StartFullScreenRealtime_Click(object sender, RoutedEventArgs e) =>
+        await StartFullScreenRealtimeAsync();
+
+    private async Task StartFullScreenRealtimeAsync()
     {
         try
         {
@@ -375,7 +391,10 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void StopRealtime_Click(object sender, RoutedEventArgs e)
+    private async void StopRealtime_Click(object sender, RoutedEventArgs e) =>
+        await StopRealtimeAsync();
+
+    private async Task StopRealtimeAsync()
     {
         try
         {
@@ -436,6 +455,8 @@ public partial class MainWindow : Window
             {
                 StatusText.Text = "Realtime pipeline stopped after an error. Check provider and OCR availability.";
             }
+
+            PublishDesktopSnapshot();
         });
     }
 
@@ -450,6 +471,9 @@ public partial class MainWindow : Window
             {
                 StatusText.Text += " · slower than target";
             }
+
+            UpdateDesktopFrameTiming(update.Timing.Total.TotalMilliseconds, update.PerformanceBudgetExceeded);
+            PublishDesktopSnapshot();
         });
     }
 
@@ -469,7 +493,8 @@ public partial class MainWindow : Window
 
     private async Task RunPopupAsync(
         Func<CancellationToken, Task<PopupTranslationResult>> operation,
-        string loadingStatus)
+        string loadingStatus,
+        Action<string>? translationCompleted = null)
     {
         _popupCancellation?.Cancel();
         _popupCancellation?.Dispose();
@@ -507,6 +532,7 @@ public partial class MainWindow : Window
                 result.SourceText,
                 result.Translation.TranslatedText,
                 GetTargetLanguageLabel());
+            translationCompleted?.Invoke(result.Translation.TranslatedText);
             StatusText.Text = "Translation complete.";
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -614,6 +640,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        ShutdownHybridUiHost();
         _popupCancellation?.Cancel();
         _popupCancellation?.Dispose();
         _popupCancellation = null;
