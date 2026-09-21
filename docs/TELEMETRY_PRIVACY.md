@@ -1,40 +1,57 @@
-# LexVerse operational telemetry and privacy
+# Operational telemetry cục bộ và privacy
 
-The user-facing controls and external text-processing consent model are documented in `PRIVACY_SETTINGS.md`.
+Control dành cho người dùng và consent gửi text được mô tả trong [PRIVACY_SETTINGS.md](PRIVACY_SETTINGS.md).
 
-LexVerse records local operational metrics to diagnose reliability and performance without collecting screen or translation content. The default implementation never uploads telemetry. New local records can be disabled immediately in Control Center; the consent-aware boundary evaluates the current preference before every event and does not require restart.
+## Trạng thái hiện tại
+
+LexVerse chỉ có local operational telemetry. Không có upload endpoint hoặc remote adapter. Record mới có thể bị tắt ngay từ Control Center; preference được kiểm tra trước mỗi event.
 
 ## Data boundary
 
-The `OperationalEvent` contract is deliberately strongly typed and cannot carry arbitrary strings, dictionaries, or object payloads. It may contain only:
+`OperationalEvent` là contract strongly typed, không chứa dictionary, arbitrary string payload hoặc object mở rộng. Schema cho phép:
 
-- event/outcome/failure enums;
-- a random correlation ID that lives for one realtime session;
-- capture kind and processing mode;
-- stage durations, block/cache/frame counts, and performance-budget status;
-- module count and process working-set size.
+- event/outcome/failure enum;
+- correlation ID ngẫu nhiên chỉ tồn tại trong một realtime session;
+- capture kind và processing mode;
+- stage duration, block/cache/frame count và budget state;
+- module count và process working-set size.
 
-It does not contain OCR source text, translated text, clipboard content, translation prompts, screen pixels, coordinates, window titles, file paths, user/account/device identifiers, provider responses, or exception messages/stacks.
+Schema không cho phép:
 
-Local crash records keep exception type, HRESULT, inner exception type, and a one-way SHA-256 stack fingerprint. Raw exception messages and stack traces are not persisted because provider errors may contain sensitive request context or local paths.
+- OCR/selected/typed/translated text;
+- clipboard, prompt hoặc provider response;
+- screen pixel, coordinate hoặc window title;
+- file path, account/device identifier hoặc token;
+- raw exception message hoặc stack trace.
 
-## Storage and performance
+Crash record chỉ giữ exception/inner type, HRESULT, timestamp và SHA-256 fingerprint để group lỗi mà không lưu raw stack/message.
 
-Operational events are queued in a bounded in-memory channel. A background writer flushes batches without blocking the WPF or realtime loop. The local JSONL log is limited to 1 MiB plus three rotated files under `%LOCALAPPDATA%\LexVerse\Logs`.
+## Lưu trữ và backpressure
 
-Realtime frame metrics are sampled at the first frame, every twentieth frame, and whenever a performance budget is exceeded. The session-closing event retains total processed frames and total budget violations, avoiding per-frame disk writes while preserving operational signal.
+- Event đi qua bounded in-memory channel với drop-oldest policy.
+- Background writer batch/flush mà không block WPF hoặc realtime loop.
+- Log JSONL nằm dưới `%LOCALAPPDATA%\LexVerse\Logs`.
+- Mỗi file tối đa 1 MiB và giữ tối đa ba rotated file.
+- Shutdown cố flush trong deadline hữu hạn; telemetry failure là fail-open đối với translation.
 
-Current warning budgets:
+Realtime ghi frame đầu, mỗi frame thứ 20 và mọi frame vượt budget. Session-closing event giữ tổng frame và tổng violation để tránh ghi từng frame.
 
-| Mode | Capture | OCR | Translation | Total |
-| --- | ---: | ---: | ---: | ---: |
-| Document/default | 120 ms | 900 ms | 1,500 ms | 2,000 ms |
-| Subtitle | 100 ms | 650 ms | 1,200 ms | 1,600 ms |
-| Game dialogue | 100 ms | 650 ms | 1,200 ms | 1,600 ms |
-| Comic/manga | 150 ms | 1,200 ms | 1,800 ms | 2,500 ms |
+## Warning budget hiện tại
 
-These thresholds produce warnings and telemetry; they never interrupt translation. CI separately enforces a responsive Control Center within 5 seconds, targets 3 seconds, and limits the initial working set to 250 MiB.
+| Mode | Capture | OCR | Translation | Tổng |
+|---|---:|---:|---:|---:|
+| Document/default | 120 ms | 900 ms | 1.500 ms | 2.000 ms |
+| Subtitle | 100 ms | 650 ms | 1.200 ms | 1.600 ms |
+| Game dialogue | 100 ms | 650 ms | 1.200 ms | 1.600 ms |
+| Comic/manga | 150 ms | 1.200 ms | 1.800 ms | 2.500 ms |
 
-## Future remote telemetry gate
+Budget chỉ tạo warning/metric; không hủy translation. CI có gate riêng: Control Center responsive trong 5 giây, mục tiêu 3 giây và initial working set tối đa 250 MiB.
 
-A remote adapter must not be enabled merely by replacing the local sink. Production enablement requires explicit user consent, a documented retention/deletion policy, TLS, regional/privacy review, server-side schema enforcement, rate limits, removal of stable device identifiers, and tests proving content fields cannot enter the payload. Local-only operation must remain available.
+## Quy tắc mở rộng
+
+- Không thêm free-form payload vào `OperationalEvent`.
+- Không dùng stable device/account ID làm correlation ID.
+- Không log error body từ provider hoặc token endpoint.
+- Thêm field mới phải có privacy review và serialization test.
+- Remote enablement cần consent riêng, documented processor/retention/deletion, TLS, rate limit và server-side schema enforcement.
+
