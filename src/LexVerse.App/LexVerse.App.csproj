@@ -1,16 +1,51 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <DesktopUiRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\LexVerse.Desktop.UI'))</DesktopUiRoot>
+    <DesktopUiOutput>$(DesktopUiRoot)\obj\dist</DesktopUiOutput>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+    <ProjectReference Include="..\LexVerse.Application\LexVerse.Application.csproj" />
     <ProjectReference Include="..\LexVerse.Core\LexVerse.Core.csproj" />
     <ProjectReference Include="..\LexVerse.Infrastructure\LexVerse.Infrastructure.csproj" />
     <ProjectReference Include="..\LexVerse.OCR\LexVerse.OCR.csproj" />
+    <ProjectReference Include="..\LexVerse.Overlay\LexVerse.Overlay.csproj" />
   </ItemGroup>
+
+  <Target Name="BuildDesktopUi" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Error Condition="!Exists('$(DesktopUiRoot)\package-lock.json')" Text="Desktop UI package-lock.json is missing." />
+    <Exec Condition="!Exists('$(DesktopUiRoot)\node_modules\.package-lock.json')"
+          WorkingDirectory="$(DesktopUiRoot)"
+          Command="npm ci --ignore-scripts --no-audit --no-fund" />
+    <Exec WorkingDirectory="$(DesktopUiRoot)" Command="npm run build" />
+  </Target>
+
+  <Target Name="CopyDesktopUi" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <DesktopUiAsset Include="$(DesktopUiOutput)\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DesktopUiAsset)"
+          DestinationFiles="@(DesktopUiAsset->'$(OutDir)DesktopUi\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="PublishDesktopUi"
+          AfterTargets="ComputeFilesToPublish"
+          DependsOnTargets="BuildDesktopUi">
+    <ItemGroup>
+      <DesktopUiPublishAsset Include="$(DesktopUiOutput)\**\*" />
+      <ResolvedFileToPublish Include="@(DesktopUiPublishAsset)" KeepDuplicates="false">
+        <RelativePath>DesktopUi\%(DesktopUiPublishAsset.RecursiveDir)%(DesktopUiPublishAsset.Filename)%(DesktopUiPublishAsset.Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 
 </Project>

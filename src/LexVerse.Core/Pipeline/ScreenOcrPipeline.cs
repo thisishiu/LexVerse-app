@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Security.Cryptography;
 using LexVerse.Core.Imaging;
 using LexVerse.Core.Ocr;
 using LexVerse.Core.ScreenCapture;
@@ -10,6 +12,7 @@ public sealed class ScreenOcrPipeline
     private readonly IFrameChangeDetector _changeDetector;
     private readonly IOcrService _ocrService;
     private readonly IOcrRegionProvider? _regionProvider;
+    private OcrCacheEntry? _lastOcrCacheEntry;
 
     public ScreenOcrPipeline(
         IScreenCaptureSession captureSession,
@@ -25,19 +28,54 @@ public sealed class ScreenOcrPipeline
 
     public async Task<ScreenOcrPipelineResult> CaptureAndRecognizeAsync(CancellationToken cancellationToken = default)
     {
+        var totalTimer = Stopwatch.StartNew();
+        var captureTimer = Stopwatch.StartNew();
         var frame = await _captureSession.CaptureFrameAsync(cancellationToken);
+        captureTimer.Stop();
+
+        var changeDetectionTimer = Stopwatch.StartNew();
         var changed = _changeDetector.HasChanged(frame);
+        changeDetectionTimer.Stop();
 
         if (!changed)
         {
-            return new ScreenOcrPipelineResult(frame, false, null);
+            totalTimer.Stop();
+            return new ScreenOcrPipelineResult(
+                frame,
+                false,
+                _lastOcrCacheEntry?.Result,
+                new ScreenOcrPipelineTiming(
+                    captureTimer.Elapsed,
+                    changeDetectionTimer.Elapsed,
+                    TimeSpan.Zero,
+                    TimeSpan.Zero,
+                    totalTimer.Elapsed))
+            {
+                OcrInputFingerprint = _lastOcrCacheEntry?.Fingerprint,
+                UsedCachedOcrResult = _lastOcrCacheEntry is not null
+            };
         }
 
         var ocrResult = await RecognizeFrameOrRegionsAsync(frame, cancellationToken);
-        return new ScreenOcrPipelineResult(frame, true, ocrResult);
+        totalTimer.Stop();
+
+        return new ScreenOcrPipelineResult(
+            frame,
+            !ocrResult.UsedCachedResult,
+            ocrResult.Result,
+            new ScreenOcrPipelineTiming(
+                captureTimer.Elapsed,
+                changeDetectionTimer.Elapsed,
+                ocrResult.RegionMask,
+                ocrResult.Ocr,
+                totalTimer.Elapsed))
+        {
+            OcrInputFingerprint = ocrResult.OcrInputFingerprint,
+            UsedCachedOcrResult = ocrResult.UsedCachedResult
+        };
     }
 
-    private async Task<OcrResult> RecognizeFrameOrRegionsAsync(
+    private async Task<TimedOcrResult> RecognizeFrameOrRegionsAsync(
         CapturedFrame frame,
         CancellationToken cancellationToken)
     {
@@ -47,58 +85,89 @@ public sealed class ScreenOcrPipeline
 
         if (regions is null || regions.Length == 0)
         {
-            return await _ocrService.RecognizeAsync(frame, cancellationToken);
+            return await RecognizePreparedFrameAsync(frame, TimeSpan.Zero, cancellationToken);
         }
 
-        var results = new List<OcrResult>();
-        foreach (var region in regions)
+        var regionMaskTimer = Stopwatch.StartNew();
+        var maskedFrame = CapturedFrameRegionMasker.KeepRegions(
+            frame,
+            regions
+                .Select(region => new RegionBounds(region.X, region.Y, region.Width, region.Height))
+                .ToArray());
+        regionMaskTimer.Stop();
+
+        return await RecognizePreparedFrameAsync(maskedFrame, regionMaskTimer.Elapsed, cancellationToken);
+    }
+
+    private async Task<TimedOcrResult> RecognizePreparedFrameAsync(
+        CapturedFrame ocrInputFrame,
+        TimeSpan regionMask,
+        CancellationToken cancellationToken)
+    {
+        var fingerprint = CreateOcrInputFingerprint(ocrInputFrame);
+        if (_lastOcrCacheEntry is not null && _lastOcrCacheEntry.Matches(ocrInputFrame, fingerprint))
         {
-            var croppedFrame = CapturedFrameCropper.Crop(frame, region.X, region.Y, region.Width, region.Height);
-            var regionResult = await _ocrService.RecognizeAsync(croppedFrame, cancellationToken);
-            results.Add(OffsetResult(regionResult, region.X, region.Y));
+            return new TimedOcrResult(
+                _lastOcrCacheEntry.Result,
+                regionMask,
+                TimeSpan.Zero,
+                true,
+                fingerprint);
         }
 
-        return MergeResults(results);
+        var ocrTimer = Stopwatch.StartNew();
+        var ocrResult = await _ocrService.RecognizeAsync(ocrInputFrame, cancellationToken);
+        ocrTimer.Stop();
+
+        _lastOcrCacheEntry = OcrCacheEntry.Create(ocrInputFrame, fingerprint, ocrResult);
+
+        return new TimedOcrResult(ocrResult, regionMask, ocrTimer.Elapsed, false, fingerprint);
     }
 
-    private static OcrResult OffsetResult(OcrResult result, int offsetX, int offsetY)
+    private static string CreateOcrInputFingerprint(CapturedFrame frame)
     {
-        var blocks = result.Blocks
-            .Select(block =>
-            {
-                var words = block.Words
-                    .Select(word => word with { Bounds = OffsetBounds(word.Bounds, offsetX, offsetY) })
-                    .ToArray();
-
-                return block with
-                {
-                    Bounds = OffsetBounds(block.Bounds, offsetX, offsetY),
-                    Words = words
-                };
-            })
-            .ToArray();
-
-        return result with { Blocks = blocks };
-    }
-
-    private static OcrResult MergeResults(IReadOnlyList<OcrResult> results)
-    {
-        var blocks = results
-            .SelectMany(result => result.Blocks)
-            .OrderBy(block => block.Bounds.Y)
-            .ThenBy(block => block.Bounds.X)
-            .ToArray();
-
-        var firstResult = results[0];
-        return firstResult with
+        if (frame.Pixels.Length < frame.ExpectedByteCount)
         {
-            Blocks = blocks,
-            RecognizedAt = DateTimeOffset.UtcNow
-        };
+            throw new ArgumentException("Frame pixel buffer is smaller than width/height/stride metadata.", nameof(frame));
+        }
+
+        var hash = SHA256.HashData(frame.Pixels.AsSpan(0, frame.ExpectedByteCount));
+        return Convert.ToHexString(hash);
     }
 
-    private static BoundingBox OffsetBounds(BoundingBox bounds, int offsetX, int offsetY)
+    private sealed record TimedOcrResult(
+        OcrResult Result,
+        TimeSpan RegionMask,
+        TimeSpan Ocr,
+        bool UsedCachedResult,
+        string OcrInputFingerprint);
+
+    private sealed record OcrCacheEntry(
+        string Fingerprint,
+        int Width,
+        int Height,
+        int Stride,
+        PixelFormat PixelFormat,
+        OcrResult Result)
     {
-        return new BoundingBox(bounds.X + offsetX, bounds.Y + offsetY, bounds.Width, bounds.Height);
+        public static OcrCacheEntry Create(CapturedFrame frame, string fingerprint, OcrResult result)
+        {
+            return new OcrCacheEntry(
+                fingerprint,
+                frame.Width,
+                frame.Height,
+                frame.Stride,
+                frame.PixelFormat,
+                result);
+        }
+
+        public bool Matches(CapturedFrame frame, string fingerprint)
+        {
+            return Fingerprint.Equals(fingerprint, StringComparison.Ordinal)
+                && Width == frame.Width
+                && Height == frame.Height
+                && Stride == frame.Stride
+                && PixelFormat == frame.PixelFormat;
+        }
     }
 }
