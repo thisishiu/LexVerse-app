@@ -588,3 +588,21 @@ Use the smallest meaningful verification:
 15. Replace the Wikipedia-first keyword explainer with a provider-backed AI annotation service if Bedrock/OpenAI-style popup understanding is added later; keep the current lookup path as a low-cost fallback.
 16. Add a prompt-aware AI translator provider that consumes `TranslationPromptOptions.Instruction`; Google Cloud Translation V2 currently ignores the runtime prompt text.
 17. Review the pushed `feature/pipeline-integration` branch on GitHub before opening or updating a PR.
+
+## 2026-09-20 Hybrid Desktop Control Center
+
+- Added `src/LexVerse.Desktop.UI`, a React/TypeScript/Vite control surface kept in the desktop repository while the WPF process remains the native host and pipeline authority. The UI follows the Editorial Noir direction and includes Control Center, quick translation, realtime controls, privacy, account/plan, quota/provider status, and an internal Settings route.
+- Added a versioned, size-bounded JSON bridge contract in `LexVerse.Application` and a WebView2 WPF adapter. Commands are allow-listed, side effects are serialized, payloads use strict deserialization, frontend reload obtains a full snapshot, and user-facing failures use stable codes without exception text.
+- WebView2 serves only packaged assets through `https://app.lexverse.local`, blocks foreign navigation, popup windows, downloads, and permissions, and disables unnecessary browser tooling in the desktop host. React receives sampled control state only; overlay frames remain native.
+- Added MSBuild integration that builds the frontend into `obj/dist`, copies it beside normal build output, and publishes it under `DesktopUi/`. CI and release-candidate workflows pin Node 24 and use `npm ci` before frontend checks/builds. End users do not require Node.
+- Added TypeScript bridge tests and five C# protocol tests. Verification passed: frontend TypeScript/Vitest 2/2, .NET Release tests 94/94 with the live Google integration excluded, Release warnings-as-errors build, and publish smoke with the HTML/CSS/JS assets present.
+- Runtime smoke passed in 1,820 ms with a 122.5 MiB working set, below the existing 3-second startup target and 250 MiB memory budget.
+- The Windows capture session already drains the frame pool and retains only the newest available frame at capture time. End-to-end superseded-request cancellation, NDJSON priority streaming, quota reservation, and Vietnam-to-Singapore p95 measurement require the separate backend and a deeper capture/OCR/translation pipeline split; the p95 <= 750 ms SLO is therefore not yet claimed.
+- External prerequisites remain: the separate `lexverse-server` repository, production Clerk/Google/Paddle configuration, MongoDB Atlas, VPS deployment, WebView2 bootstrapper/MSIX dependency validation, locally bundled licensed font binaries, and clean-VM visual/accessibility/capture-exclusion regression runs.
+
+### 2026-09-21 Repository Handoff
+
+- Hybrid desktop work is isolated on `feature/hybrid-desktop-ui`, based on the current `origin/feature/pipeline-integration`; merge it back through a pull request rather than directly into `main`.
+- Standardized JavaScript generated-file ignores while keeping source, `package-lock.json`, and architecture artifacts reviewable. The shared Draw.io HTML diagram now lives at `docs/architecture/LexVerse-diagram.drawio.html` instead of an ignored `reports/` directory.
+- Verification: frontend typecheck and Vitest passed 2/2; the production Vite build emitted HTML/CSS/JS under `obj/dist`; the Release warnings-as-errors solution build passed for 12 projects with 0 warnings and 0 errors; 94 .NET tests passed with only the credentialed live Google translation test explicitly excluded; publish smoke included the expected HTML, CSS, and JavaScript under `DesktopUi/`.
+- Next recommended work: review the branch diff and CI run, perform a foreground WebView2/manual accessibility smoke test, then merge the pull request into `feature/pipeline-integration`.
