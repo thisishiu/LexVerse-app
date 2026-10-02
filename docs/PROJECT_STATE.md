@@ -100,7 +100,7 @@ As of this update:
 - `codex/overlay-ocr-block-contrast` still exists locally at the merged overlay commit and has no upstream.
 - The current branch baseline includes the Control Center settings panel, language/shortcut configuration, ignored-term handling, comic all-caps translation fix, and text-geometry comic OCR grouping.
 - The production MVP adds the production WPF shell, Popup/F6, Document-region translation, privacy consent, local diagnostics, modular feature access, packaging/update automation, and release gates.
-- Popup, Region, and Document mode are the free MVP feature matrix. Account, payment, Full screen, and specialized modes are dormant post-MVP extension points.
+- Popup, Region, Document mode, and Comic mode are the free MVP feature matrix. Account, payment, Full screen, Subtitle, and Game dialogue remain dormant post-MVP extension points.
 - `.codegraph/` is a local untracked index and must remain outside product commits.
 - The previous Comic OCR `11M` normalization and RAM optimization attempt remain reverted; they are not present in the current working tree.
 - `.gitignore` already ignores common build outputs, Visual Studio state, `.env`, local config, credentials, generated files, and artifacts.
@@ -561,13 +561,148 @@ Use the smallest meaningful verification:
 
 ### 2026-07-20 Production MVP Scope Correction
 
-- Narrowed the launch product to two free workflows: Popup/F6 (including Quick text) and Document-region translation.
-- Added `MvpProductPolicy` as the single tested free-feature matrix. Popup, Region, and Document mode no longer depend on account/payment configuration; Full screen and specialized processing modes remain deferred.
-- Simplified the production Control Center to a single Document translation action. Full screen and Comic/Subtitle/Game selectors are hidden from the MVP experience.
+- Narrowed the launch product to two free workflows: Popup/F6 (including Quick text) and document/comic-region translation.
+- Added `MvpProductPolicy` as the single tested free-feature matrix. Popup, Region, Document mode, and Comic mode no longer depend on account/payment configuration; Full screen, Subtitle, and Game dialogue remain deferred.
+- Simplified the production Control Center to a single region translation action with Document and Comic / manga processing choices. Full screen, Subtitle, and Game selectors are hidden from the MVP experience.
 - Account/plan UI is hidden when commerce is unconfigured. Existing commerce and signed-entitlement extension points remain dormant for future validation instead of becoming MVP launch dependencies.
 - Kept privacy consent, local diagnostics controls, packaging/update, crash safety, accessibility, and performance gates because they directly affect a dependable customer MVP.
 - The authoritative in/out list and clean-VM acceptance criteria are in `docs/MVP_PRODUCTION_SCOPE.md`.
 - Verification: Release warnings-as-errors build passed with 0 warnings and 0 errors; the full Release suite passed 90/90, including the new exact MVP feature-matrix test.
+
+### 2026-07-20 Comic Mode Rollback After Pull
+
+- After the local branch fast-forwarded from `6198789 feat: add comic OCR grouping mode` to `2a4b19f feat: ship production MVP foundation`, restored the production app's visible Comic / manga path to match the nearest pre-pull comic behavior.
+- The production Region card now exposes an OCR processing mode selector with Document and Comic / manga. Selecting Comic maps realtime startup to `RealtimeTranslationOptions.Comic`, which keeps the existing `ComicSpeechBubbleGrouper` text-geometry grouping rather than hard-coding Document options.
+- Added `ProductFeatures.ComicMode` back to `MvpProductPolicy.FreeFeatures` and updated `MvpProductPolicyTests`; Full screen, Subtitle, and Game dialogue remain outside the free MVP policy.
+- Updated `docs/MVP_PRODUCTION_SCOPE.md` so the launch scope says document/comic-region translation instead of deferring Comic / manga.
+- Verification: `dotnet build src/LexVerse.App/LexVerse.App.csproj --no-restore` passed with 0 warnings and 0 errors.
+- Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore --filter MvpProductPolicyTests` passed: 1 passed, 0 failed, 0 skipped.
+- Caveat: the first policy test run was started in parallel with the app build and failed only because both processes tried to write `src/LexVerse.Application\obj\Debug\net10.0\LexVerse.Application.dll`; the isolated rerun passed.
+
+### 2026-09-29 Light Orange UI Redesign
+
+- Replaced the dark brown Pipeline Sample UI with a cohesive light design system: off-white workspace, white cards, dark navy text, subtle gray borders/shadows, and restrained `#FF7A00` orange accents.
+- Centralized the sample palette, typography, semantic state brushes, and shadow tokens in `samples/LexVerse.Pipeline.Sample/App.xaml`; retained reusable control styles for buttons, inputs, dropdowns, checkboxes, sliders, cards, badges, and keyboard shortcuts.
+- Refined the Control Center header, sidebar, cards, runtime status, prompt surface, bottom status bar, and disabled/focus/hover states without changing OCR, translation, capture, popup, hotkey, or realtime behavior.
+- Redesigned the Settings drawer with the same tokens and five responsive shortcut rows. Long shortcut labels remain readable, keyboard focus receives an orange indicator, and long sidebar checkbox labels wrap instead of clipping.
+- Synchronized the Pipeline Sample popup and selection overlay with the light/orange system, including loading, result, keyword, focus, and selection states.
+- Applied the same light/orange visual direction to the production `LexVerse.App` shell, popup, and selection overlay while preserving the existing uncommitted Document/Comic mode wiring.
+- Visual verification used a temporary off-screen WPF render harness at `1460x920` and the minimum `1080x760` sample size. The main window, Settings drawer, and result popup were inspected; the harness and generated workspace files were removed afterward.
+- Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore` passed with 0 warnings and 0 errors.
+- Verification: `dotnet build src/LexVerse.App/LexVerse.App.csproj --no-restore` passed with 0 warnings and 0 errors.
+- Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed 90/90 when run with network access. The first sandboxed run passed 89/90 and failed only because the real Google Cloud integration test could not reach `translation.googleapis.com:443`.
+- Git caveat: `feature/pipeline-integration` remains aligned with `origin/feature/pipeline-integration`; all prior uncommitted MVP/Comic changes were preserved and the UI redesign is also currently uncommitted.
+- Next recommended work: perform a human keyboard-only, 100%/150%/200% DPI, High Contrast, popup drag, region selection, and live realtime-state pass on the Windows desktop.
+
+### 2026-09-29 Reference-Matched UI Refinement
+
+- Refined the Pipeline Sample Control Center against the supplied visual reference: a larger gradient `Lx` brand tile, roomier header and sidebar, elevated white cards, two-layer mode icons, compact provider badges, orange primary actions, ring-thumb sliders, and tinted status indicators.
+- Reworked the translation-style area into a read-only default-instruction summary plus an empty `Custom prompt` field. Leaving the field empty still applies the existing default instruction in `CreateTranslationPromptOptions`, so the visual simplification does not remove prompt guidance from translation requests.
+- Made the Realtime card title scale down only when its available column becomes narrow, preventing the localized title and `Win OCR + Google` badge from overlapping at the minimum supported window width.
+- Visually inspected the main window at the reference size `1582x995` and minimum size `1120x780`, plus the Settings drawer and translation result popup. The reference-size layout has no page scrollbar; the minimum layout scrolls without clipped or overlapping controls. The temporary WPF render harness and its generated workspace files were removed.
+- Verification: `dotnet build samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj --no-restore` passed with 0 warnings and 0 errors.
+- Verification: `dotnet test tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj --no-restore` passed 90/90 with network access. The sandboxed attempt passed 89/90 and failed only because the real Google Cloud integration test could not open `translation.googleapis.com:443`.
+
+### 2026-09-29 Native Window Drag And Resize
+
+- Replaced the Pipeline Sample's manual `WM_NCLBUTTONDOWN` drag emulation with WPF `WindowChrome`. The 94px custom header now behaves as a native Windows caption, while an 8px native resize border preserves standard edge/corner resizing, snap layouts, double-click maximize, and drag-to-restore behavior.
+- Added a second native hit-test band on the left, right, and bottom edges: the outermost `0-8px` remains available for resize, while the wider adjacent `8-30px` band reports `HTCAPTION` so users can comfortably move the window from those three sides.
+- Interactive controls are excluded from the expanded drag band. In particular, a visible edge scrollbar remains `HTCLIENT`, so minimum-size scrolling is not intercepted by window movement.
+- Marked the header action groups and Settings overlay as hit-test-visible chrome content so Popup, Region, Full screen, Stop, Settings, window controls, and the drawer remain clickable inside the caption area.
+- Removed the duplicate shell/header mouse handlers, edge proximity checks, and `ReleaseCapture`/`SendMessage` interop that previously made dragging depend on custom event routing.
+- Native hit-test verification at the minimum `1120x780` window returned `HTLEFT`, `HTRIGHT`, and `HTBOTTOM` for the three outer resize edges; `HTCAPTION` at `26px` inside all three expanded drag bands; and `HTCLIENT` for the body and rightmost visible scrollbar. The temporary check harness and generated workspace files were removed afterward.
+- Verification: both Debug and Release builds of `samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj` passed with 0 warnings and 0 errors. The current Debug build used a temporary output directory because the running app held its normal `LexVerse.Overlay.dll`; the temporary build output was removed.
+
+### 2026-09-29 Vector Icon Clarity Pass
+
+- Replaced the ambiguous `Segoe MDL2 Assets` glyphs in the high-salience Popup mode, Realtime mode, translation-style summary, Settings action, header Popup action, and Popup capture action with reusable WPF vector templates.
+- Added consistent 2px-style camera, filled play, folded document-with-lines, and settings-gear artwork. The vectors scale cleanly at different DPI settings and do not depend on an icon font or a new package dependency.
+- Increased the inner mode tiles to `32x32` and enlarged the camera/play/document artwork so the symbols remain legible without becoming visually heavier than their labels.
+- Visually inspected the full Control Center at `1582x995` and dedicated crops of the two mode cards, translation-style summary, and Settings button. The document now clearly communicates an instruction/prompt rather than resembling a phone or empty rectangle.
+- Verification: Debug and Release builds of `samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj` passed with 0 warnings and 0 errors. The temporary visual render harness and temporary Debug output were removed.
+
+### 2026-09-29 Japanese To Vietnamese Translation
+
+- Completed the Pipeline Sample's Japanese-to-Vietnamese path for both Popup/F6 and Realtime modes. The selected source locale is now normalized from `ja-JP` to `ja` and passed into realtime Google Cloud Translation instead of silently using `auto`.
+- Made Windows OCR filtering language-aware. Japanese OCR now retains Hiragana, Katakana, common/compatibility CJK ideographs, and half-width Katakana while preserving the existing English heuristic for Latin game text such as `HP 100`.
+- Added a startup capability check for the selected Windows OCR locale. If the required `ja-JP` language pack is unavailable, the UI reports an actionable error instead of falling back to an incompatible OCR engine.
+- Added `LexVerse.OCR.Tests` to the solution with 13 focused cases covering Japanese-script acceptance, noise rejection, Latin game terms under Japanese OCR, and unchanged English filtering behavior.
+- Updated the live Google integration test to translate `おはようございます` from `ja` to `vi`. The targeted live test passed, and the full translation suite passed 90/90.
+- Runtime verification on the current machine confirmed `ja-JP OCR supported: True`; the real `WindowsOcrService` recognized a locally rendered Japanese sentence as `こ れ は 日 本 語 の テ ス ト で す`.
+- Verification: the OCR suite passed 13/13 and the Pipeline Sample Release build passed with 0 warnings and 0 errors. A final manual Popup/Realtime screen pass is still recommended because overlay interaction cannot be fully validated by the service-level harness.
+
+### 2026-09-30 Japanese Source-Only OCR Filtering
+
+- Corrected the Japanese OCR filter after live testing showed that standalone English and Vietnamese blocks were also being translated in Japanese-to-Vietnamese mode.
+- Removed the English-heuristic fallback when the active OCR locale normalizes to `ja`. A block must now contain Hiragana, Katakana, or Japanese-used CJK characters before it can enter OCR grouping and translation.
+- Mixed Japanese content can still retain adjacent Latin terms and numbers, for example `勇者 HP 100`, but standalone blocks such as `HP 100`, `Open the inventory`, and `Xin chào, đây là tiếng Việt.` are rejected before any Google Translation request.
+- Expanded `OcrTextLanguageFilterTests` to 16 cases, including explicit English/Vietnamese rejection under `ja-JP` and unchanged English-locale behavior.
+- Verification: the Release OCR suite passed 16/16; the Pipeline Sample Release build passed with 0 warnings and 0 errors.
+- Git caveat: the branch remains aligned with `origin/feature/pipeline-integration`, and all pre-existing uncommitted MVP/UI work remains preserved.
+
+### 2026-09-30 Japanese OCR False-Positive Hardening
+
+- Reproduced the reported false positive with a temporary WPF frame containing `www.lophoctiengnhat.com`, the Vietnamese page title, and a Japanese control sentence. Windows `ja-JP` OCR hallucinated the stylized logo as `M'WM み ...` and converted separators in the Vietnamese line to the Katakana middle dot `・`.
+- Identified two defects in the previous predicate: any single Japanese-looking glyph admitted an entire Latin block, and the broad Katakana range incorrectly counted `・` punctuation as Japanese-language evidence.
+- Japanese filtering now counts only Japanese letters, excludes Katakana punctuation/prolongation marks as standalone evidence, requires at least two Japanese letters, and requires Japanese letters to represent at least 30% of all letters in the block.
+- The stricter rule rejects the exact reproduced logo/Vietnamese OCR output and low-density strings such as `www.lophoc日本.com`, while retaining normal Japanese, Kanji words, `勇者 HP 100`, and `Windowsの設定`.
+- Runtime verification with the real Windows OCR engine produced only `こ れ は 日 本 語 の テ ス ト で す` after filtering; the URL, stylized logo, and Vietnamese title were absent. The temporary harness and generated build files were removed.
+- Expanded the OCR regression suite to 21/21 passing cases. The Pipeline Sample Release build passed with 0 warnings and 0 errors.
+- Intentional tradeoff: isolated one-character Japanese blocks are rejected because they cannot be distinguished reliably from the observed logo hallucination without a heavier language model.
+- Git caveat: the branch remains aligned with `origin/feature/pipeline-integration`; all unrelated uncommitted MVP/UI changes remain preserved.
+
+### 2026-09-30 Strict Japanese Script Extraction
+
+- Clarified the JP-to-VI OCR requirement: recognized output must contain Japanese script only, not merely reject standalone Latin blocks.
+- Added word-level script filtering before visual-line grouping. Under `ja-JP`, pure Latin/Vietnamese/URL words are removed, and Latin letters are stripped from accepted mixed words; English and other OCR locales retain their previous text unchanged.
+- Retained Hiragana, Katakana, Kanji, Japanese iteration characters, and Japanese punctuation/prolongation marks. Digits and punctuation are retained only when attached to a word containing Japanese text; standalone numeric/punctuation/Latin words are dropped.
+- Mixed examples now resolve as `Windowsの設定` to `の設定`, `勇者HP100` to `勇者100`, and `ABCカタカナxyz` to `カタカナ`. Low-evidence mixed logo/domain words remain rejected by the existing count/ratio guard.
+- Expanded `OcrTextLanguageFilterTests` to 31 passing cases covering Latin removal, mixed-word extraction, URL/Vietnamese rejection, Japanese punctuation, and unchanged English-locale behavior.
+- End-to-end verification used the real `WindowsOcrService("ja-JP")` on a rendered frame containing the reported URL/Vietnamese content, a Japanese sentence, and `Windowsの設定 HP100`. Final blocks were only `こ れ は 日 本 語 の テ ス ト で す` and `の 設 定`; an explicit ASCII-letter scan returned `False`. The temporary harness and generated files were removed.
+- Intentional tradeoff remains: an isolated one-character Japanese block is rejected to suppress the reproduced stylized-logo hallucination.
+- Git caveat: all unrelated uncommitted MVP/UI changes remain preserved.
+
+### 2026-09-30 Japanese Furigana Alignment And Bounded Overlay
+
+- Analyzed the reported Japanese textbook page and separated two issues that looked like one coordinate offset. Small furigana/ruby text was emitted as independent narrow OCR blocks, and the WPF overlay used only `MinHeight`, allowing long Vietnamese translations to wrap and grow downward across later rows even when the original Y coordinate was correct.
+- Added `JapaneseRubyTextFilter` before visual-line construction. For `ja-JP`, it removes a candidate only when it is substantially smaller than a nearby base glyph, lies tightly above it, and overlaps it horizontally; similarly sized lines, distant headings, non-overlapping notes, and non-Japanese OCR remain unchanged.
+- Covered the real small-kana edge case where ruby sits 14px above a shorter base kana. The OCR geometry suite now passes 38/38 cases.
+- Added a fixed `Height` to overlay items and bound/clipped the shared WPF overlay border to it. Translation boxes can no longer auto-expand below the source row.
+- Added `OverlayTextLayoutCalculator`, shared by the Pipeline Sample and production app. It expands width within the overlay boundary and reduces font size only as needed to fit the full translation inside the original row height, with border/measurement safety included.
+- Added three layout tests covering long-text fitting, short-text font preservation, and bounded expansion from narrow source boxes. The full Release translation suite, including the live Google test, passed 93/93.
+- Runtime OCR verification on a rendered Japanese page observed raw furigana at 5-9px and base glyphs at 15-25px. After filtering, only the two 25-26px base lines remained; Vietnamese source lines were also absent under strict Japanese extraction.
+- Visual verification rendered the actual overlay XAML: the two translated boxes retained source Y coordinates 53 and 159, used fixed heights 30px and 29px, displayed their full Vietnamese sentences, and did not overlap the following row. The temporary OCR/visual harness and generated PNG were removed.
+- Verification: Release builds of both `samples/LexVerse.Pipeline.Sample` and `src/LexVerse.App` passed with 0 warnings and 0 errors.
+- Remaining manual check: retest the supplied photographed page because camera perspective, moire, and blur can alter Windows OCR word geometry compared with a clean rendered frame.
+- Git caveat: all unrelated uncommitted MVP/UI changes remain preserved.
+
+### 2026-09-30 Rotated OCR And Mixed-DPI Overlay Alignment
+
+- Reproduced the reported environment with a 100% primary monitor and a 125% external monitor. Windows Graphics Capture returned a `2560x1440` frame while the system-DPI-aware WPF surface used a virtualized `2048x1152` coordinate space.
+- Audited the frame-to-screen ratio and confirmed that region masking preserves full-frame coordinates. The remaining vertical drift was not caused by cropping or the selected-region mask.
+- Identified the primary defect in the Windows OCR contract: when `OcrResult.TextAngle` is non-zero, word bounding rectangles are measured in the OCR-rotated image space. The pipeline retained `TextAngle` but never applied it to the overlay, which displaced boxes on photographed or skewed pages.
+- Added `RotationAngle` to `OverlayRenderFrame`, propagated the detected OCR angle through cached, partial, and completed results, and rotated the complete WPF overlay surface clockwise around the captured frame center. This follows the Windows OCR coordinate contract and keeps all boxes on their corresponding slanted source rows without a page-specific Y offset.
+- Hardened mixed-DPI placement by recording the capture monitor's effective DPI in `FrameGeometry`, retaining one fixed scale for physical-to-DIP conversion, and applying the overlay HWND bounds through native `SetWindowPos`.
+- Runtime verification on the actual 125% monitor confirmed: capture item/frame `2560x1440`, WPF surface `2048x1152`, exact HWND monitor bounds, and a `2.75` degree transformed point matching the independent rotation calculation to three decimal places. The temporary diagnostic project and build output were removed.
+- Added regression coverage for OCR angle propagation and explicit 125% monitor coordinate conversion. Release OCR tests passed 38/38; Release translation tests, including the live Google integration, passed 97/97.
+- Verification: Release warnings-as-errors builds of both `samples/LexVerse.Pipeline.Sample` and `src/LexVerse.App` passed with 0 warnings and 0 errors.
+
+### 2026-09-30 Japanese OCR Cross-Script Veto
+
+- Reproduced the severe bilingual-document failure with the real Windows `ja-JP` OCR engine. Vietnamese rows were returned as mostly Latin text containing isolated false Kanji such as `信`, `葩`, and `朝`; after word-level Latin stripping, those false glyphs were the only survivors and were incorrectly translated into unrelated overlay fragments.
+- Added a second OCR pass only for Japanese source mode. It prefers an installed `vi-VN` recognizer and otherwise uses `en-US` as a Latin-script guard; all non-Japanese source modes keep their existing single-pass behavior.
+- Added `JapaneseLatinTextVeto`. It compares Japanese candidates with strong Latin readings on the same physical text band, normalizes each recognizer's bounding boxes through its own `TextAngle`, and rejects a candidate only when overlapping Latin evidence clearly dominates. A partial side-by-side match removes only the affected word instead of discarding valid Japanese elsewhere on the row.
+- The veto runs before furigana removal, visual-line grouping, and translation. This blocks Japanese-looking hallucinations produced from Vietnamese/English pixels, which a Unicode-only output filter cannot distinguish from real Kanji.
+- Runtime verification used a bilingual Japanese/Vietnamese consulting-contract frame matching the reported layout. Raw Japanese OCR reproduced mixed rows such as a Vietnamese sentence containing false Kanji; final service output retained seven genuine Japanese rows and removed every Vietnamese row, the Latin title, and the `IFK` logo. The temporary harness and generated output were removed.
+- Added five geometry/script regression tests covering Latin-dominant rows, weak Latin readings over real Japanese, adjacent bilingual rows, mixed side-by-side content, and angle-normalized coordinates. The Release OCR suite passes 43/43.
+- Verification: the Release translation suite, including the live Google integration, passes 97/97; the complete solution and both WPF applications build with warnings as errors, 0 warnings, and 0 errors.
+- Intentional cost: Japanese realtime OCR now performs a second local Windows OCR pass when Japanese candidates exist. No additional network request or external text disclosure is introduced.
+
+### 2026-10-02 UI And Japanese Translation Feature Branch
+
+- Consolidated the light/orange Control Center redesign, vector icon cleanup, native window movement/resizing, Document/Comic UI path, Japanese-to-Vietnamese translation, strict Japanese OCR filtering, furigana handling, bounded overlay layout, OCR rotation, mixed-DPI placement, and bilingual Latin-script veto on `feature/ui-japanese-translation`.
+- The branch starts from the synchronized `origin/feature/pipeline-integration` commit `2a4b19f`; existing production MVP behavior and tests remain included rather than being rebased onto an unrelated feature line.
+- Pre-publication verification: Release OCR tests passed 43/43, Release translation tests passed 97/97 including the live Google integration, and `dotnet build LexVerse.slnx --configuration Release --no-restore --warnaserror` completed with 0 warnings and 0 errors.
 
 ## Next Recommended Work
 
@@ -575,7 +710,7 @@ Use the smallest meaningful verification:
 2. Toggle `Black blocks` off/on while the pipeline is running and confirm both palettes remain readable and aligned.
 3. Use the overlay font `-` and `+` controls while the pipeline is running and confirm the active overlay text resizes without drifting away from OCR boxes.
 4. While the pipeline is running, open another app over the selected app and confirm the overlay hides; return focus to the selected app and confirm it reappears in the selected app bounds.
-5. Run `samples/LexVerse.Pipeline.Sample` visually and confirm the single frameless Control Center opens with the expected header icons/window controls, dark left-panel inputs, yellow checkbox/slider controls, and without the removed top mode navigation.
+5. Run `samples/LexVerse.Pipeline.Sample` visually and confirm the single frameless Control Center opens with the expected light sidebar, orange controls, and header/window actions; move it from the header and inner left/right/bottom frame bands, resize from the outer edge/corners, snap to screen edges, and drag down from maximized.
 6. Test Popup/F6 by highlighting text in another app, pressing F6, and confirming loading/result popup placement, close-on-outside-click, optional dragging, and clickable `Important terms` summaries appearing below the chips without hiding the translation.
 7. Test Region at the current Windows display scale by dragging a screen area and confirming realtime OCR/translation overlays stay inside the selected physical region.
 8. Test Full screen on the primary/nearest monitor and confirm overlays still align to source coordinates.
@@ -583,8 +718,11 @@ Use the smallest meaningful verification:
 10. Test ignored terms live with Popup/F6 and Region realtime, especially multi-word terms and game stats such as HP, MP, and EXP.
 11. Open the new Settings gear panel and verify that English/Tiếng Việt app language switching, duplicate shortcut warnings, and Popup global hotkey re-registration behave correctly.
 12. Live-test an all-caps comic speech bubble with `Keep acronyms / technical terms` enabled and confirm the text is translated instead of restored unchanged.
-13. Live-test `OCR MODE = Comic / manga` on selected comic bubbles and full pages; confirm one bubble becomes one translated overlay block while separate bubbles stay separate.
+13. Live-test `OCR MODE = Comic / manga` in both the sample and production Region card on selected comic bubbles and full pages; confirm one bubble becomes one translated overlay block while separate bubbles stay separate.
 14. Add image-based speech balloon segmentation later if text-geometry grouping is not enough for overlapping, irregular, or nested manga bubbles.
 15. Replace the Wikipedia-first keyword explainer with a provider-backed AI annotation service if Bedrock/OpenAI-style popup understanding is added later; keep the current lookup path as a low-cost fallback.
 16. Add a prompt-aware AI translator provider that consumes `TranslationPromptOptions.Instruction`; Google Cloud Translation V2 currently ignores the runtime prompt text.
-17. Review the pushed `feature/pipeline-integration` branch on GitHub before opening or updating a PR.
+17. Review the pushed `feature/ui-japanese-translation` branch on GitHub before opening or updating a PR.
+18. Retest the reported `lophoctiengnhat.com` page with Japanese as the source and Vietnamese as the target; the logo, URL, Vietnamese title, and Latin fragments inside mixed blocks should not appear in OCR/translation overlays, while real Japanese text should still translate at 100% and 200% display scaling.
+19. Retest the supplied Japanese textbook photo: furigana should not create separate overlays, each Vietnamese translation should remain on the corresponding Japanese baseline, and no box should grow into the next source row.
+20. Retest the supplied bilingual consulting-contract image in Japanese-to-Vietnamese mode: Japanese rows should translate, while the logo, Vietnamese rows, and Latin headings should produce no overlays.

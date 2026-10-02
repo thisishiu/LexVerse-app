@@ -9,6 +9,7 @@ namespace LexVerse.Overlay.Models
         private double _x;
         private double _y;
         private double _width = double.NaN;
+        private double _height = double.NaN;
         private double _minHeight;
         private double _fontSize = 20;
         private string _background = "White";
@@ -37,6 +38,12 @@ namespace LexVerse.Overlay.Models
         {
             get => _width;
             set => SetField(ref _width, value);
+        }
+
+        public double Height
+        {
+            get => _height;
+            set => SetField(ref _height, value);
         }
 
         public double MinHeight

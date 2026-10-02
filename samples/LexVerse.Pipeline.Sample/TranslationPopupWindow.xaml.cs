@@ -151,7 +151,7 @@ public partial class TranslationPopupWindow : Window
 
         KeywordDetailPanel.Visibility = Visibility.Visible;
         KeywordDetailTitle.Text = term;
-        KeywordDetailText.Foreground = new SolidColorBrush(Color.FromRgb(255, 247, 233));
+        KeywordDetailText.Foreground = (Brush)FindResource("WhiteTextBrush");
         KeywordDetailText.Text = "Đang tìm thông tin và tóm tắt...";
         KeywordDetailPanel.BringIntoView();
         UpdateLayout();

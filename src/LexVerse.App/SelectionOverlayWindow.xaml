@@ -14,34 +14,37 @@
     <Canvas x:Name="SelectionCanvas">
         <Border x:Name="SelectionBorder"
                 Visibility="Collapsed"
-                BorderBrush="#FFF2B84B"
+                BorderBrush="{StaticResource AccentBrush}"
                 BorderThickness="2"
-                Background="#24F2B84B"
+                Background="#33FF7A00"
                 CornerRadius="5"/>
         <Border x:Name="SelectionSizeBadge"
                 Visibility="Collapsed"
-                Background="#E815181E"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
                 CornerRadius="6"
                 Padding="8,4">
             <TextBlock x:Name="SelectionSizeText"
-                       Foreground="#FFF2B84B"
+                       Foreground="{StaticResource AccentBrush}"
                        FontSize="12"
                        FontWeight="SemiBold"/>
         </Border>
         <Border x:Name="Hint"
                 Canvas.Left="28"
                 Canvas.Top="28"
-                Background="#F015181E"
-                BorderBrush="#343A46"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="10"
-                Padding="16,12">
+                Padding="16,12"
+                Effect="{StaticResource FlyoutShadowEffect}">
             <StackPanel>
                 <TextBlock Text="Select a realtime translation region"
-                           Foreground="#FFF5F7FA"
+                           Foreground="{StaticResource TextBrush}"
                            FontWeight="SemiBold"/>
                 <TextBlock Text="Drag around text · Esc to cancel"
-                           Foreground="#FF9DA7B5"
+                           Foreground="{StaticResource MutedTextBrush}"
                            FontSize="12"
                            Margin="0,4,0,0"/>
             </StackPanel>

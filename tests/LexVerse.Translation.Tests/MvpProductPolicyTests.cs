@@ -12,11 +12,11 @@ public sealed class MvpProductPolicyTests
         FeatureKey[] expected = [
             ProductFeatures.PopupTranslation,
             ProductFeatures.RegionTranslation,
-            ProductFeatures.DocumentMode
+            ProductFeatures.DocumentMode,
+            ProductFeatures.ComicMode
         ];
 
         Assert.Equal(expected, MvpProductPolicy.FreeFeatures);
         Assert.DoesNotContain(ProductFeatures.FullScreenTranslation, MvpProductPolicy.FreeFeatures);
-        Assert.DoesNotContain(ProductFeatures.ComicMode, MvpProductPolicy.FreeFeatures);
     }
 }

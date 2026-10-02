@@ -390,7 +390,8 @@ public sealed class RealtimeTranslationPipeline
             items,
             trace,
             ocrResult.Frame.Geometry.Version,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            ocrResult.OcrResult?.TextAngle ?? 0);
     }
 
     private static ScreenRect ClampToSource(ScreenRect rect, ScreenRect source)

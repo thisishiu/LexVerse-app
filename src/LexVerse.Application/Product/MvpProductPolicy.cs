@@ -11,6 +11,7 @@ public static class MvpProductPolicy
     public static IReadOnlyCollection<FeatureKey> FreeFeatures { get; } = Array.AsReadOnly<FeatureKey>([
         ProductFeatures.PopupTranslation,
         ProductFeatures.RegionTranslation,
-        ProductFeatures.DocumentMode
+        ProductFeatures.DocumentMode,
+        ProductFeatures.ComicMode
     ]);
 }

@@ -13,6 +13,7 @@
     <Project Path="src/LexVerse.Overlay/LexVerse.Overlay.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/LexVerse.OCR.Tests/LexVerse.OCR.Tests.csproj" />
     <Project Path="tests/LexVerse.Translation.Tests/LexVerse.Translation.Tests.csproj" />
   </Folder>
 </Solution>

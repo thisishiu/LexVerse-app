@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Windows.Media;
 using System.Windows.Threading;
 using LexVerse.Application.Realtime;
 using LexVerse.Core.Overlay;
+using LexVerse.Overlay;
 using LexVerse.Overlay.Models;
 using OverlayWindow = LexVerse.Overlay.MainWindow;
 
@@ -43,7 +45,11 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput
         }
 
         _window ??= new OverlayWindow(_items);
-        _window.SetPhysicalBounds(frame.Trace.Geometry.SourceScreenRect);
+        _window.SetPhysicalBounds(
+            frame.Trace.Geometry.SourceScreenRect,
+            frame.Trace.Geometry.DpiScaleX,
+            frame.Trace.Geometry.DpiScaleY);
+        _window.SetContentRotation(frame.RotationAngle);
         if (!_window.IsVisible)
         {
             _window.Show();
@@ -62,15 +68,26 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput
         var maxWidth = Math.Max(24, window.ActualWidth - x);
         var fontRect = window.ScreenPhysicalToLocalDip(
             new(0, 0, 1, Math.Max(1, item.FontSize)));
+        var layout = OverlayTextLayoutCalculator.Calculate(
+            item.TranslatedText,
+            targetRect.Width,
+            targetRect.Height,
+            maxWidth,
+            Math.Clamp(fontRect.Height, MinFontSize, MaxFontSize),
+            MinFontSize,
+            HorizontalPadding,
+            VerticalPadding,
+            VisualTreeHelper.GetDpi(window).PixelsPerDip);
 
         return new TextItem
         {
             Text = item.TranslatedText,
             X = x,
             Y = y,
-            Width = Math.Min(Math.Max(24, targetRect.Width) + HorizontalPadding * 2, maxWidth),
-            MinHeight = Math.Max(18, targetRect.Height) + VerticalPadding * 2,
-            FontSize = Math.Clamp(fontRect.Height, MinFontSize, MaxFontSize),
+            Width = layout.Width,
+            Height = layout.Height,
+            MinHeight = layout.Height,
+            FontSize = layout.FontSize,
             Background = "Black",
             BorderBrush = "Transparent",
             Foreground = "White"
@@ -102,6 +119,7 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput
         target.X = source.X;
         target.Y = source.Y;
         target.Width = source.Width;
+        target.Height = source.Height;
         target.MinHeight = source.MinHeight;
         target.FontSize = source.FontSize;
         target.Background = source.Background;

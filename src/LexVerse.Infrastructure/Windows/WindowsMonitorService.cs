@@ -6,6 +6,7 @@ namespace LexVerse.Infrastructure.Windows;
 public sealed class WindowsMonitorService
 {
     private const uint MonitorDefaultToNearest = 0x00000002;
+    private const int MonitorDpiTypeEffective = 0;
 
     public ScreenRect GetNearestMonitorBounds(IntPtr window)
     {
@@ -61,6 +62,34 @@ public sealed class WindowsMonitorService
             info.Monitor.Bottom - info.Monitor.Top);
     }
 
+    public DpiInfo GetMonitorDpi(IntPtr monitor)
+    {
+        if (monitor == IntPtr.Zero)
+        {
+            throw new ArgumentException("Monitor handle must not be zero.", nameof(monitor));
+        }
+
+        try
+        {
+            var result = GetDpiForMonitor(
+                monitor,
+                MonitorDpiTypeEffective,
+                out var dpiX,
+                out var dpiY);
+            return result == 0 && dpiX > 0 && dpiY > 0
+                ? new DpiInfo(dpiX, dpiY)
+                : DpiInfo.Default;
+        }
+        catch (DllNotFoundException)
+        {
+            return DpiInfo.Default;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return DpiInfo.Default;
+        }
+    }
+
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromPoint(NativePoint point, uint flags);
 
@@ -69,6 +98,13 @@ public sealed class WindowsMonitorService
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(
+        IntPtr monitor,
+        int dpiType,
+        out uint dpiX,
+        out uint dpiY);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint

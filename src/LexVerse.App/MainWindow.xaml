@@ -22,7 +22,7 @@
         <Border Grid.Row="0"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,0,0,1"
-                Background="#101319">
+                Background="{StaticResource SurfaceBrush}">
             <Grid Margin="34,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -31,7 +31,7 @@
                 </Grid.ColumnDefinitions>
                 <Border Width="40" Height="40" CornerRadius="10" Background="{StaticResource AccentBrush}">
                     <TextBlock Text="LV"
-                               Foreground="#17130A"
+                               Foreground="{StaticResource InverseTextBrush}"
                                FontWeight="Bold"
                                FontSize="15"
                                HorizontalAlignment="Center"
@@ -42,15 +42,15 @@
                     <TextBlock Text="Realtime language workspace" Foreground="{StaticResource MutedTextBrush}" FontSize="12"/>
                 </StackPanel>
                 <Border Grid.Column="2"
-                        Background="#14281F"
-                        BorderBrush="#245B42"
+                        Background="{StaticResource SuccessSoftBrush}"
+                        BorderBrush="#A7DCC7"
                         BorderThickness="1"
                         CornerRadius="14"
                         Padding="12,6"
                         VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal">
-                        <Ellipse Width="7" Height="7" Fill="#54D28B" Margin="0,0,7,0"/>
-                        <TextBlock x:Name="HotkeyStatusText" Text="F6 starting…" Foreground="#A8E7C3" FontSize="12"/>
+                        <Ellipse Width="7" Height="7" Fill="{StaticResource SuccessBrush}" Margin="0,0,7,0"/>
+                        <TextBlock x:Name="HotkeyStatusText" Text="F6 starting…" Foreground="{StaticResource SuccessBrush}" FontSize="12"/>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -77,8 +77,9 @@
                 <Border Background="{StaticResource SurfaceBrush}"
                         BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="1"
-                        CornerRadius="14"
-                        Padding="22">
+                        CornerRadius="8"
+                        Padding="22"
+                        Effect="{StaticResource CardShadowEffect}">
                     <StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -150,9 +151,9 @@
                 <TextBlock x:Name="ModuleCountText" Foreground="{StaticResource MutedTextBrush}" FontSize="12" Margin="0,4,0,14"/>
 
                 <Border Background="{StaticResource AccentDarkBrush}"
-                        BorderBrush="#6B5424"
+                        BorderBrush="#FFD1A8"
                         BorderThickness="1"
-                        CornerRadius="12"
+                        CornerRadius="8"
                         Padding="16">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -163,8 +164,8 @@
                             <TextBlock Text="Popup" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
                             <TextBlock Text="Selection + quick text" Foreground="{StaticResource MutedTextBrush}" FontSize="12" Margin="0,4,0,0"/>
                         </StackPanel>
-                        <Border Grid.Column="1" Background="#2D623F" CornerRadius="10" Padding="8,4" VerticalAlignment="Top">
-                            <TextBlock x:Name="PopupStatusText" Text="CONSENT" Foreground="#B8F2CF" FontSize="10" FontWeight="Bold"/>
+                        <Border Grid.Column="1" Background="{StaticResource SuccessSoftBrush}" CornerRadius="10" Padding="8,4" VerticalAlignment="Top">
+                            <TextBlock x:Name="PopupStatusText" Text="CONSENT" Foreground="{StaticResource SuccessBrush}" FontSize="10" FontWeight="Bold"/>
                         </Border>
                     </Grid>
                 </Border>
@@ -172,25 +173,31 @@
                 <Border Background="{StaticResource SurfaceBrush}"
                         BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="1"
-                        CornerRadius="12"
+                        CornerRadius="8"
                         Padding="16"
-                        Margin="0,10,0,0">
+                        Margin="0,10,0,0"
+                        Effect="{StaticResource CardShadowEffect}">
                     <StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Document translation" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
-                            <TextBlock x:Name="RealtimeStatusText" Grid.Column="1" Text="READY" Foreground="#A8E7C3" FontSize="10" FontWeight="Bold"/>
+                            <TextBlock Text="Region translation" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="RealtimeStatusText" Grid.Column="1" Text="READY" Foreground="{StaticResource SuccessBrush}" FontSize="10" FontWeight="Bold"/>
                         </Grid>
-                        <TextBlock Text="Select an area of a document and keep its translated overlay updated."
+                        <TextBlock Text="Select a document or comic region and keep its translated overlay updated."
                                    Foreground="{StaticResource MutedTextBrush}"
                                    TextWrapping="Wrap"
                                    FontSize="12"
                                    Margin="0,5,0,0"/>
-                        <ComboBox x:Name="ModeBox" SelectedIndex="0" Visibility="Collapsed">
+                        <ComboBox x:Name="ModeBox"
+                                  SelectedIndex="0"
+                                  SelectionChanged="ModeBox_SelectionChanged"
+                                  AutomationProperties.Name="OCR processing mode"
+                                  Margin="0,10,0,0">
                             <ComboBoxItem Content="Document" Tag="document"/>
+                            <ComboBoxItem Content="Comic / manga" Tag="comic"/>
                         </ComboBox>
                         <Grid Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>
@@ -226,9 +233,10 @@
                 <Border Background="{StaticResource SurfaceBrush}"
                         BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="1"
-                        CornerRadius="12"
+                        CornerRadius="8"
                         Padding="16"
-                        Margin="0,10,0,0">
+                        Margin="0,10,0,0"
+                        Effect="{StaticResource CardShadowEffect}">
                     <StackPanel>
                         <StackPanel x:Name="CommercePanel" Visibility="Collapsed">
                         <Grid>
@@ -298,7 +306,7 @@
         </Grid>
 
         <Border Grid.Row="2"
-                Background="#101319"
+                Background="{StaticResource SurfaceBrush}"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,1,0,0">
             <Grid Margin="34,0">

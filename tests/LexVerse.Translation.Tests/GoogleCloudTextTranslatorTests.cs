@@ -7,7 +7,7 @@ namespace LexVerse.Translation.Tests;
 public sealed class GoogleCloudTextTranslatorTests
 {
     [Fact]
-    public async Task TranslateAsync_WithGoogleCloudCredentials_TranslatesUsingRealApi()
+    public async Task TranslateAsync_WithGoogleCloudCredentials_TranslatesJapaneseToVietnamese()
     {
         var envFilePath = FindRepositoryFile(".env");
         Assert.SkipWhen(envFilePath is null, "Missing .env file for Google Cloud integration test.");
@@ -20,14 +20,14 @@ public sealed class GoogleCloudTextTranslatorTests
         var translator = new GoogleCloudTextTranslator(envFilePath: envFilePath);
 
         var result = await translator.TranslateAsync(
-            "Good morning",
+            "おはようございます",
             "vi",
-            "en",
+            "ja",
             TestContext.Current.CancellationToken);
 
-        Assert.Equal("Good morning", result.SourceText);
+        Assert.Equal("おはようございます", result.SourceText);
         Assert.Equal("vi", result.TargetLanguage);
-        Assert.Equal("en", result.SourceLanguage);
+        Assert.Equal("ja", result.SourceLanguage);
         Assert.False(string.IsNullOrWhiteSpace(result.TranslatedText));
         Assert.NotEqual(result.SourceText, result.TranslatedText);
     }

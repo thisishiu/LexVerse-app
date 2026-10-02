@@ -14,15 +14,16 @@
         Loaded="Window_Loaded">
     <Window.Resources>
         <Style x:Key="PopupIconButton" TargetType="Button">
-            <Setter Property="Background" Value="#241F1A"/>
-            <Setter Property="BorderBrush" Value="#3A3128"/>
-            <Setter Property="Foreground" Value="#FFF7E9"/>
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource StrokeBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource WhiteTextBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="IconButtonBorder"
+                                Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="6">
@@ -31,7 +32,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#30281F"/>
+                                <Setter TargetName="IconButtonBorder" Property="Background" Value="{StaticResource PrimarySoftBrush}"/>
+                                <Setter TargetName="IconButtonBorder" Property="BorderBrush" Value="#FFB36B"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="IconButtonBorder" Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -40,9 +45,9 @@
         </Style>
 
         <Style x:Key="KeywordChipButton" TargetType="Button">
-            <Setter Property="Background" Value="#4B3519"/>
-            <Setter Property="BorderBrush" Value="#7A5625"/>
-            <Setter Property="Foreground" Value="#FFD796"/>
+            <Setter Property="Background" Value="{StaticResource PrimarySoftBrush}"/>
+            <Setter Property="BorderBrush" Value="#FFD1A8"/>
+            <Setter Property="Foreground" Value="#9A4500"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="10,5"/>
             <Setter Property="Margin" Value="0,0,8,8"/>
@@ -51,7 +56,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="KeywordChipBorder"
+                                Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="7"
@@ -61,8 +67,12 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#5A3F1F"/>
-                                <Setter Property="BorderBrush" Value="#D8A24A"/>
+                                <Setter TargetName="KeywordChipBorder" Property="Background" Value="#FFE4CC"/>
+                                <Setter TargetName="KeywordChipBorder" Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="KeywordChipBorder" Property="BorderBrush" Value="{StaticResource PrimaryBrush}"/>
+                                <Setter TargetName="KeywordChipBorder" Property="BorderThickness" Value="2"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -72,10 +82,11 @@
     </Window.Resources>
 
     <Border x:Name="PopupShell"
-            Background="#F2221F1D"
-            BorderBrush="#FF3A3128"
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource StrokeBrush}"
             BorderThickness="1"
-            CornerRadius="14"
+            CornerRadius="10"
+            Effect="{StaticResource FlyoutShadowEffect}"
             SnapsToDevicePixels="True"
             MouseLeftButtonDown="PopupShell_MouseLeftButtonDown"
             RenderTransformOrigin="0.5,0">
@@ -85,7 +96,7 @@
         <StackPanel MinWidth="420"
                     MaxWidth="620">
             <Grid x:Name="HeaderBar"
-                  Background="#14110E"
+                  Background="{StaticResource SurfaceRaisedBrush}"
                   Cursor="SizeAll"
                   MouseLeftButtonDown="HeaderBar_MouseLeftButtonDown">
                 <Grid.ColumnDefinitions>
@@ -93,7 +104,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="Lexverse translate"
-                           Foreground="#FFFFF7E9"
+                           Foreground="{StaticResource WhiteTextBrush}"
                            FontWeight="Bold"
                            Margin="18,12"/>
                 <Button Grid.Column="1"
@@ -113,14 +124,14 @@
                         Margin="20,18,20,20">
                 <TextBlock x:Name="LoadingText"
                            Text="Translating selected text..."
-                           Foreground="#FFA79A89"
+                           Foreground="{StaticResource MutedTextBrush}"
                            FontSize="14"
                            TextWrapping="Wrap"/>
                 <ProgressBar Height="4"
                              Margin="0,12,0,0"
                              IsIndeterminate="True"
-                             Foreground="#FFD8A24A"
-                             Background="#33211E17"
+                             Foreground="{StaticResource PrimaryBrush}"
+                             Background="#FFE4CC"
                              BorderThickness="0"/>
             </StackPanel>
 
@@ -128,60 +139,65 @@
                         Visibility="Collapsed"
                         Margin="20,16,20,20">
                 <TextBlock Text="Original"
-                           Foreground="#FFA79A89"
+                           Foreground="{StaticResource MutedTextBrush}"
                            Margin="0,0,0,8"/>
-                <Border Background="#191613"
+                <Border Background="{StaticResource SurfaceRaisedBrush}"
+                        BorderBrush="{StaticResource StrokeBrush}"
+                        BorderThickness="1"
                         CornerRadius="8"
                         Padding="12">
                     <TextBlock x:Name="SourceTextBlock"
-                               Foreground="#FFFFF7E9"
+                               Foreground="{StaticResource WhiteTextBrush}"
                                TextWrapping="Wrap"
                                LineHeight="22"/>
                 </Border>
 
                 <TextBlock x:Name="TargetLabel"
                            Text="Vietnamese"
-                           Foreground="#FFD8A24A"
+                           Foreground="{StaticResource PrimaryBrush}"
+                           FontWeight="SemiBold"
                            Margin="0,16,0,8"/>
-                <Border Background="#191613"
+                <Border Background="{StaticResource PrimarySoftBrush}"
+                        BorderBrush="#FFD1A8"
+                        BorderThickness="1"
                         CornerRadius="8"
                         Padding="12">
                     <TextBlock x:Name="TranslatedTextBlock"
-                               Foreground="#FFFFF7E9"
+                               Foreground="{StaticResource WhiteTextBrush}"
                                FontWeight="SemiBold"
                                TextWrapping="Wrap"
                                LineHeight="24"/>
                 </Border>
 
                 <Border x:Name="KeywordPanel"
-                        Background="#30281F"
-                        BorderBrush="#6E5125"
+                        Background="{StaticResource SurfaceRaisedBrush}"
+                        BorderBrush="{StaticResource StrokeBrush}"
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="12"
                         Margin="0,14,0,0">
                     <StackPanel>
                         <TextBlock Text="Important terms"
-                                   Foreground="#FFD8A24A"
+                                   Foreground="{StaticResource WhiteTextBrush}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,8"/>
                         <WrapPanel x:Name="KeywordItemsPanel"/>
 
                         <Border x:Name="KeywordDetailPanel"
                                 Visibility="Collapsed"
-                                Background="#211B15"
-                                BorderBrush="#4B3519"
+                                Background="{StaticResource SurfaceBrush}"
+                                BorderBrush="#FFD1A8"
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="12"
                                 Margin="0,8,0,0">
                             <StackPanel>
                                 <TextBlock x:Name="KeywordDetailTitle"
-                                           Foreground="#FFD796"
+                                           Foreground="#9A4500"
                                            FontWeight="SemiBold"
                                            Margin="0,0,0,6"/>
                                 <TextBlock x:Name="KeywordDetailText"
-                                           Foreground="#FFF7E9"
+                                           Foreground="{StaticResource WhiteTextBrush}"
                                            TextWrapping="Wrap"
                                            LineHeight="22"/>
                             </StackPanel>

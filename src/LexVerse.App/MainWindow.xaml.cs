@@ -242,6 +242,9 @@ public partial class MainWindow : Window
     private void OfferBox_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
         BuyButton.IsEnabled = _commerce.State.Account is not null && OfferBox.SelectedItem is not null;
 
+    private void ModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        UpdateRealtimeButtonState(_privacyPreferences.Current.AllowRemoteTextProcessing);
+
     private async Task RunCommerceOperationAsync(
         Func<CancellationToken, Task> operation,
         string status)
@@ -271,15 +274,28 @@ public partial class MainWindow : Window
         _fullScreenAccessAllowed = fullScreen.IsAllowed;
         var remoteProcessingAllowed = _privacyPreferences.Current.AllowRemoteTextProcessing;
         QuickTranslateButton.IsEnabled = remoteProcessingAllowed;
+        PopupStatusText.Text = remoteProcessingAllowed ? "ACTIVE" : "CONSENT";
+        UpdateRealtimeButtonState(remoteProcessingAllowed);
+    }
+
+    private void UpdateRealtimeButtonState(bool remoteProcessingAllowed)
+    {
+        if (RegionButton is null || FullScreenButton is null || StopRealtimeButton is null || RealtimeStatusText is null)
+        {
+            return;
+        }
+
+        var modeLabel = GetSelectedProcessingModeLabel();
+        var modeRegionLabel = $"{modeLabel} region";
         RegionButton.IsEnabled = _regionAccessAllowed && remoteProcessingAllowed;
         FullScreenButton.IsEnabled = _fullScreenAccessAllowed && remoteProcessingAllowed;
-        PopupStatusText.Text = remoteProcessingAllowed ? "ACTIVE" : "CONSENT";
         RegionButton.Content = !_regionAccessAllowed
-            ? "Document region \u00B7 unavailable"
-            : remoteProcessingAllowed ? "Select document region" : "Document region \u00B7 consent";
+            ? $"{modeRegionLabel} \u00B7 unavailable"
+            : remoteProcessingAllowed ? $"Select {modeLabel.ToLowerInvariant()} region" : $"{modeRegionLabel} \u00B7 consent";
         FullScreenButton.Content = !_fullScreenAccessAllowed
             ? "Full screen \u00B7 locked"
             : remoteProcessingAllowed ? "Full screen" : "Full screen \u00B7 consent";
+        StopRealtimeButton.Content = $"Stop {modeLabel.ToLowerInvariant()} translation";
         RealtimeStatusText.Text = !remoteProcessingAllowed
             ? "CONSENT"
             : _regionAccessAllowed ? "READY" : "UNAVAILABLE";
@@ -404,13 +420,28 @@ public partial class MainWindow : Window
     private RealtimeTranslationOptions CreateRealtimeOptions()
     {
         var sourceLanguage = GetSelectedTag(SourceLanguageBox);
+        var baseOptions = GetSelectedProcessingModeTag() switch
+        {
+            "comic" => RealtimeTranslationOptions.Comic,
+            _ => RealtimeTranslationOptions.Document
+        };
 
-        return RealtimeTranslationOptions.Document with
+        return baseOptions with
         {
             SourceLanguage = sourceLanguage,
             TargetLanguage = GetSelectedTag(TargetLanguageBox)
         };
     }
+
+    private string GetSelectedProcessingModeTag() =>
+        ModeBox.SelectedItem is ComboBoxItem { Tag: { } tag }
+            ? tag.ToString() ?? "document"
+            : "document";
+
+    private string GetSelectedProcessingModeLabel() =>
+        GetSelectedProcessingModeTag().Equals("comic", StringComparison.OrdinalIgnoreCase)
+            ? "Comic"
+            : "Document";
 
     private string GetOcrLanguageTag() => GetSelectedTag(SourceLanguageBox) switch
     {
