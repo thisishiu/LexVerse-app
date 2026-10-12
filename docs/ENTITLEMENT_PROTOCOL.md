@@ -1,10 +1,14 @@
-# Signed Entitlement Protocol
+# Protocol signed entitlement phía desktop
 
-LexVerse treats the entitlement service as the authority for paid desktop capabilities. The product catalog may describe plans and prices, but it never grants access.
+## Trạng thái và authority
+
+Client verifier, HTTPS provider và signed offline cache đã được triển khai. Entitlement API, issuer, private key, purchase source of truth và key-rotation operation là **external/deferred** và không nằm trong repository này.
+
+Catalog chỉ mô tả plan/offer; chỉ signed entitlement hợp lệ mới cấp paid feature. Free MVP vẫn do `MvpProductPolicy` cấp độc lập.
 
 ## Envelope
 
-The API returns at most 256 KiB of UTF-8 JSON:
+API trả tối đa 256 KiB UTF-8 JSON:
 
 ```json
 {
@@ -16,55 +20,52 @@ The API returns at most 256 KiB of UTF-8 JSON:
 }
 ```
 
-`signature` is ECDSA P-256/SHA-256 over the exact decoded `payload` bytes. It is not a signature over reserialized JSON. The client selects a pinned public key by `keyId`; private signing keys must remain in the entitlement service or its key-management system.
+`signature` là ECDSA P-256/SHA-256 trên **đúng decoded payload bytes**, không phải JSON được serialize lại. Client chọn pinned public key theo `keyId`; private key không được xuất hiện trong desktop, source, log hoặc CI artifact.
 
-The decoded payload schema is:
+Payload:
 
 ```json
 {
   "schemaVersion": 1,
-  "subjectId": "account-or-installation-subject",
-  "revision": "monotonic-or-unique-server-revision",
+  "subjectId": "opaque-account-subject",
+  "revision": "monotonic-or-unique-revision",
   "issuedAtUtc": "2026-07-20T12:00:00Z",
   "notBeforeUtc": "2026-07-20T12:00:00Z",
   "expiresAtUtc": "2026-07-23T12:00:00Z",
-  "grants": [
-    {
-      "feature": "translation.region",
-      "startsAtUtc": null,
-      "endsAtUtc": null,
-      "source": "subscription"
-    }
-  ]
+  "grants": [{
+    "feature": "translation.full-screen",
+    "startsAtUtc": null,
+    "endsAtUtc": null,
+    "source": "subscription"
+  }]
 }
 ```
 
-Unknown JSON fields, schemas, algorithms, keys, subjects, invalid signatures, oversized data, malformed grants, future claims, expired claims, and envelopes valid for more than 72 hours are rejected. Every grant is clamped to the signed envelope expiry, including a grant whose `endsAtUtc` is null.
+Verifier từ chối unknown field/schema/algorithm/key/subject, chữ ký sai, dữ liệu quá giới hạn, claim malformed/future/expired và envelope dài hơn 72 giờ. Mỗi grant bị clamp theo `expiresAtUtc`, kể cả khi `endsAtUtc` là `null`.
 
-## Online and offline behavior
+## Online và offline
 
-The client requests the envelope over HTTPS with an eight-second deadline that covers headers and content. A verified response is immediately usable; persisting it is best effort. The exact signed envelope is stored under `%LOCALAPPDATA%\LexVerse\Entitlements` using a same-directory temporary file and atomic replacement.
+- Remote request chỉ dùng HTTPS và có deadline tám giây bao phủ header/content.
+- Verified online response dùng được ngay; việc ghi cache là best effort.
+- Exact signed envelope được lưu atomically dưới `%LOCALAPPDATA%\LexVerse\Entitlements`.
+- Offline read áp dụng lại cùng size limit, signature/key/subject/time validation.
+- Không có unsigned format và không có grace period sau expiry.
+- Account switch/sign-out invalidate cache trong bộ nhớ; envelope subject khác không được tái sử dụng.
 
-If the request fails, the cached envelope is read with the same size limit and fully verified again against the current subject, pinned key, and clock. There is no unsigned offline format and no grace period after `expiresAtUtc`.
+## Cấu hình desktop
 
-Popup translation is the explicit free tier. Region and Full screen fail closed when neither a current remote envelope nor a still-valid signed cache is available.
-
-## Desktop configuration
-
-The current adapter reads these deployment-time variables:
-
-- `LEXVERSE_ENTITLEMENT_ENDPOINT`: absolute HTTPS URL.
+- `LEXVERSE_ENTITLEMENT_ENDPOINT`: absolute HTTPS URI.
 - `LEXVERSE_ENTITLEMENT_KEY_ID`: pinned public-key identifier.
-- `LEXVERSE_ENTITLEMENT_PUBLIC_KEY_PEM`: P-256 public key PEM; escaped `\n` is accepted.
+- `LEXVERSE_ENTITLEMENT_PUBLIC_KEY_PEM`: P-256 public key PEM; chấp nhận escaped `\n`.
 
-The subject and bearer token now come from the OAuth account session described in `ACCOUNT_COMMERCE.md`; they are not deployment-time identity variables. Offline fallback can use the cached session's opaque subject even when token refresh is temporarily unavailable, but the signed entitlement must still match that subject.
+Subject và bearer token lấy từ OAuth account session. Thiếu hoặc sai cấu hình không chặn startup; paid capability fail closed trong khi free MVP tiếp tục hoạt động.
 
-Missing or invalid configuration does not prevent app startup. It disables paid capabilities while leaving the free tier usable. Production deployment should support overlapping pinned keys during rotation.
+## Yêu cầu cho service external
 
-## Backend requirements
+- Authenticate caller và derive `subjectId` phía server.
+- Tính grant từ purchase/subscription authority; không tin plan, price hoặc feature do client gửi.
+- Giữ private key trong KMS/HSM hoặc secret boundary tương đương.
+- Ship public key mới trong client trước khi issuer chuyển `keyId`; cho phép overlap khi rotation.
+- Rate-limit issuance, tạo revision có thể audit và không ghi token/PII/content không cần thiết.
+- Revoke bằng authoritative state và envelope lifetime ngắn; test tamper, expiry, unknown key, wrong subject và account switch.
 
-- Authenticate the caller and derive `subjectId` server-side.
-- Recompute grants from authoritative purchase/subscription state; never accept client-supplied plan or price as authority.
-- Keep signing private keys out of desktop binaries, logs, CI artifacts, and source control.
-- Rotate keys by shipping the next public key before issuing envelopes with its `keyId`.
-- Rate-limit issuance, audit revisions without logging feature content beyond necessary product metadata, and revoke by shortening envelope lifetime or ceasing renewal.

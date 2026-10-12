@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         mc:Ignorable="d"
         Title="LexVerse Control Center"
         Width="980"
@@ -326,5 +327,10 @@
                            VerticalAlignment="Center"/>
             </Grid>
         </Border>
+
+        <wv2:WebView2 x:Name="WebUi"
+                      Grid.RowSpan="3"
+                      Visibility="Hidden"
+                      AutomationProperties.Name="LexVerse web control center" />
     </Grid>
 </Window>

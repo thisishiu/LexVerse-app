@@ -66,11 +66,7 @@ public sealed class RemoteProductCatalogProvider : IProductCatalogProvider
 
     internal static void ValidateHttps(Uri endpoint, string parameterName)
     {
-        ArgumentNullException.ThrowIfNull(endpoint);
-        if (!endpoint.IsAbsoluteUri || endpoint.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(endpoint.UserInfo))
-        {
-            throw new ArgumentException("Remote commerce endpoints must use absolute HTTPS URIs without embedded credentials.", parameterName);
-        }
+        LexVerse.Infrastructure.Configuration.BackendEndpointPolicy.Validate(endpoint, parameterName);
     }
 
     private sealed class CatalogWire

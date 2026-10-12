@@ -1,93 +1,140 @@
-# LexVerse Production Architecture
+# Kiến trúc production của LexVerse
 
-This document turns the production goal into architectural boundaries and an incremental delivery order. `PROJECT_STATE.md` remains the live handoff log.
+Tài liệu này mô tả kiến trúc **đang có trong repository** trước, sau đó mới nêu ranh giới target còn thiếu. Snapshot bàn giao ngắn gọn nằm ở [PROJECT_STATE.md](PROJECT_STATE.md); phạm vi phát hành nằm ở [MVP_PRODUCTION_SCOPE.md](MVP_PRODUCTION_SCOPE.md).
 
-## Product principles
+## Quy ước trạng thái
 
-- A feature is a stable product capability, not a button or a class name.
-- Product plans assign feature keys; runtime code asks for an entitlement before executing a paid capability.
-- Checkout price, renewal date, trial duration, refunds, and entitlement issuance are server/store authority. The desktop client may display a cached catalog but must not grant access from that catalog.
-- OCR, translation, capture, overlay, billing, updates, and telemetry depend on contracts rather than concrete providers.
-- The production app is assembled in `src/LexVerse.App`; `samples/` remain diagnostics and visual demos.
-- Local-first processing and bounded caches are preferred for latency and privacy. Remote calls must have timeouts, cancellation, retry budgets, and observable failure states.
+| Trạng thái | Ý nghĩa |
+|---|---|
+| Đã triển khai | Code được composition root sử dụng và xuất hiện trong workflow hiện tại. |
+| Dormant/conditional | Client code tồn tại nhưng bị ẩn, phụ thuộc cấu hình hoặc không thuộc MVP. |
+| External/deferred | Thành phần không tồn tại trong repository này. |
 
-## Target boundaries
-
-```text
-LexVerse.App (WPF shell and composition root)
-  -> Product/Application services
-     -> LexVerse.Core contracts and policies
-  -> Infrastructure adapters
-     -> Windows capture, OCR, translation providers, entitlement API,
-        signed offline cache, updater, diagnostics
-  -> LexVerse.Overlay
-```
-
-UI code only coordinates user intent and renders state. It must not construct providers, run billing rules, or contain the realtime loop.
-
-## Commercial model
-
-Feature keys are stable identifiers such as `translation.popup`, `translation.region`, `translation.full-screen`, `mode.document`, and `mode.comic`. A remotely configurable product catalog groups those keys into plans. An independently refreshed entitlement snapshot grants individual keys to a subject for an optional UTC validity window.
-
-The Core catalog models display offers separately from plans. A plan may have multiple remote offers with different prices, currencies, billing periods, and trial periods. A billing adapter maps store offers to catalog plan IDs and returns verified entitlements. This allows price, currency, promotion, billing interval, and plan duration to change without releasing a new desktop binary. The offer is display metadata only: checkout must resolve its ID again at the authoritative store/backend.
-
-Runtime flow:
+## Kiến trúc as-built
 
 ```text
-user action -> feature access check -> allowed: execute application use case
-                                   -> denied: explain/upgrade/refresh UX
+┌──────────────── LexVerse Desktop process ────────────────┐
+│ React/Vite UI                                            │
+│      │ bridge v1                                         │
+│ WebView2 in WPF MainWindow ── native WPF fallback        │
+│      │                                                   │
+│ AppCompositionRoot                                       │
+│      ├─ Application: use case/coordinator/gate/privacy   │
+│      ├─ Core: model/policy/pipeline/cache/geometry       │
+│      ├─ Infrastructure: Windows + remote adapters        │
+│      ├─ OCR: Windows OCR                                 │
+│      └─ Overlay: native WPF windows                      │
+└──────────────────────────────────────────────────────────┘
+                         │ HTTPS, conditional
+                         ▼
+              External providers/services
 ```
 
-Backend operations must repeat authorization; hiding a desktop button is not a security boundary.
+Dependency direction thực tế:
 
-## Delivery milestones
+- `LexVerse.Core` không phụ thuộc WPF hay provider cụ thể.
+- `LexVerse.Application` phụ thuộc Core và định nghĩa orchestration/port.
+- `LexVerse.Infrastructure` phụ thuộc Application/Core/OCR để hiện thực adapter.
+- `LexVerse.App` là composition root và được phép tham chiếu tất cả module production.
+- `LexVerse.Desktop.UI` giao tiếp với native host qua contract JSON, không gọi provider trực tiếp.
+- `LexVerse.Overlay` render output trung lập từ pipeline; frame không đi qua React.
 
-1. **Product foundation**
-   - Stable feature keys, versioned plans, time-bound entitlements, provider contract, tests.
-   - Decide initial free/trial/paid feature matrix outside the binary.
-2. **Production application shell**
-   - Convert `LexVerse.App` from console placeholder to WPF composition root.
-   - Move Control Center behavior out of `Pipeline.Sample` into application services and view models.
-   - Add dependency injection, structured configuration, global exception handling, and single-instance behavior.
-3. **Feature modules**
-   - Package Popup, Region, Full screen, Document, and Comic as independently registered modules.
-   - Each module declares its feature key, commands, settings, and required providers.
-4. **Distribution and updates**
-   - Produce signed Windows packages and a stable/beta release channel.
-   - Add signed update manifests, atomic update/rollback, release notes, and compatibility checks.
-5. **Operations and scale**
-   - Keep the desktop pipeline horizontally independent; scale remote translation, identity, entitlement, and catalog services statelessly.
-   - Add correlation IDs, privacy-aware crash reports, latency/error metrics, rate limits, circuit breakers, and cost budgets.
-6. **Quality and UX**
-   - CI gates for build, unit/integration tests, packaging smoke tests, dependency/security scanning, and performance budgets.
-   - Measure capture-to-overlay latency, OCR/translation cache hit rate, memory stability, overlay flicker, startup time, update success, and task completion UX.
+## Host hybrid và bridge v1
 
-## Initial production gates
+`MainWindow` khởi tạo native controls trước rồi tải WebView2 bất đồng bộ. Asset frontend được build vào `obj/dist`, copy/publish dưới `DesktopUi/` và phục vụ bằng virtual host `https://app.lexverse.local`. Khi WebView2 Runtime hoặc asset không khả dụng, WebView bị collapse và native WPF Control Center tiếp tục hoạt động.
 
-- No paid use case runs without an explicit feature access decision.
-- No secrets or service-account JSON ship in the client package.
-- All remote calls have cancellation and bounded timeouts.
-- App startup and background loops have observable, user-safe failure handling.
-- Update artifacts and entitlement caches are cryptographically verified.
-- A failed update can roll back without losing user settings.
-- Settings and catalog schemas are versioned and migration-tested.
-- Critical UI flows are keyboard accessible and verified at common Windows DPI scales.
+Bridge có ba envelope:
 
-## Current implementation status
+```json
+{ "version": 1, "id": "...", "type": "command", "payload": {} }
+{ "version": 1, "id": "...", "ok": true, "payload": {} }
+{ "version": 1, "type": "app.snapshot", "payload": {} }
+```
 
-- `LexVerse.Application` now owns entitlement refresh/cache, feature gating, module registration, the Popup translation use case, and cancellable realtime orchestration.
-- `LexVerse.App` is a WPF composition root rather than a console placeholder.
-- Popup selection and quick-text translation run through the same entitlement gate; the Google provider initializes only on first use.
-- Region and Full screen run through a registered realtime module. The application coordinator owns authorization, start/restart/stop, cadence, state, partial/final output, and deterministic cleanup; Windows capture/OCR/pipeline creation remains behind an Infrastructure factory, and WPF only renders neutral frame updates.
-- Document, Comic/manga, Subtitle, and Game dialogue are runtime processing profiles selected by the realtime module rather than separately constructed pipelines. Region coordinates are clipped and converted from physical screen space into captured-frame pixels in Core.
-- LexVerse control, popup, and overlay windows opt out of Windows display capture so the product does not OCR its own UI. Overlay items are reconciled in place to reduce frame-to-frame flicker.
-- Popup is the explicit free tier. Region and Full screen require an ES256-signed remote entitlement or a still-valid signed offline envelope; paid grants are no longer bundled in the binary. The verifier pins P-256 public keys by `keyId`, binds claims to the authenticated server-derived subject, limits offline lifetime to 72 hours, and clamps every grant to envelope expiry. Missing identity/backend configuration fails closed for paid features without preventing startup.
-- Account and commerce orchestration now lives in Application contracts. Infrastructure implements OAuth Authorization Code + PKCE S256 through the system browser and an ephemeral loopback callback, DPAPI current-user session storage, bounded remote catalog mapping, bearer-authenticated idempotent checkout creation, purchase restore, and account-bound entitlement requests. Sign-out invalidates paid access immediately.
-- Control Center exposes account status, remotely supplied public offers, hosted checkout, restore/refresh, and sign-out. Checkout sends only `offerId`; backend/store price and purchase state remain authoritative.
-- External text processing is consent-denied by default and enforced once at the shared translator boundary used by Popup and all realtime modes. Versioned privacy settings also control local content-free diagnostics at runtime. Control Center exposes explicit consent/upgrade/free-mode states plus UI Automation names, a status live region, keyboard access keys, visible focus borders, and a scrollable account/privacy surface.
-- `scripts/package-msix.ps1` creates a self-contained ReadyToRun MSIX plus channel App Installer and checksum. Stable/Beta have separate identities; HTTPS and signing are mandatory unless unsigned mode is explicitly selected for CI/local validation. The App Installer version can advance independently of the package version so a channel can roll back to a previously signed package.
-- `.github/workflows/ci.yml` builds with warnings as errors, runs the complete test suite, audits direct/transitive NuGet advisories, verifies packaging safety guards, and creates/validates an unsigned MSIX fixture on Windows. `global.json` pins the SDK feature band and Dependabot monitors NuGet plus workflow actions weekly.
-- `.github/workflows/release-candidate.yml` is a manually approved signed-candidate pipeline restricted to commits reachable from `main`. Protected Beta/Stable environments gate ephemeral PFX access; packaging validates certificate identity/EKU/private key/validity, then verifies signature/timestamp/hash/update pointers and emits immutable metadata plus GitHub/Sigstore provenance. It deliberately stops before live publication.
-- `OperationalEvent` is a strongly typed, content-free telemetry boundary. Startup, Popup, realtime sessions, sampled frames, stage latency, cache counts, budget violations, and memory are written asynchronously to a bounded rotating local JSONL sink; no remote upload is enabled. Crash records omit raw messages/stacks and retain only type/HRESULT plus a one-way fingerprint.
-- CI enforces a responsive Control Center within a 5-second hard budget (3-second target) and an initial 250 MiB working-set budget. Runtime mode-specific budgets warn and emit metrics without interrupting translation.
-- A real code-signing identity and download host, deployed OAuth/catalog/checkout/restore/entitlement services plus key rotation, payment-provider webhook/reconciliation tests, protected GitHub release environments/secrets, and the clean-VM signed rehearsal remain before a public production release. The repository now defines promotion/attestation and credentialed/privacy/accessibility evidence gates, but external evidence has not yet been produced.
+Ràng buộc:
+
+- message tối đa 256 KiB;
+- version phải bằng `1`;
+- `id` tối đa 128 ký tự, `type` tối đa 96 ký tự;
+- JSON phân biệt hoa thường và từ chối member lạ;
+- native chỉ dispatch command nằm trong allow-list;
+- side effect được serialize; lỗi trả stable error code thay vì exception text;
+- frontend timeout command sau 30 giây và hủy pending request khi dispose.
+
+WebView2 chặn foreign navigation, new window, download và permission request; DevTools và context menu mặc định bị tắt. Chỉ asset đóng gói được ánh xạ vào origin nội bộ.
+
+## Workflow production hiện tại
+
+### Popup/F6 và Quick text
+
+`PopupTranslationUseCase` kiểm tra `translation.popup` trước khi đọc selected text hoặc gọi translator. Quick text dùng cùng gate và translator. F6/global hotkey, clipboard copy có thời hạn, cancellation và native popup do WPF host quản lý.
+
+### Document-region realtime
+
+`RealtimeTranslationCoordinator` kiểm tra feature trước khi tạo capture resource. `WindowsRealtimePipelineSessionFactory` lắp Windows Graphics Capture, region provider, Windows OCR, cache, translator và mapping. Kết quả được chuyển thành `RealtimeFrameUpdate`; `WpfRealtimeOverlayOutput` reconcile item tại chỗ để giảm flicker và chuyển physical screen coordinate sang WPF DIP.
+
+```text
+capture -> region/change policy -> OCR -> normalize/group
+-> translation cache -> translate miss -> coordinate mapping -> overlay
+```
+
+Control Center, popup và overlay dùng display affinity để tránh bị capture ngược vào pipeline.
+
+## Privacy, telemetry và lỗi
+
+- `ConsentCheckingTextTranslator` là enforcement point dùng chung ngay trước external translator.
+- External text processing mặc định tắt; thu hồi consent dừng realtime.
+- `ConsentAwareOperationalTelemetry` kiểm tra preference trên từng record.
+- `OperationalEvent` là schema typed, không có arbitrary payload chứa nội dung.
+- Local JSONL writer bounded/rotated; không có remote telemetry adapter.
+- Crash log chỉ giữ type, HRESULT, timestamp và fingerprint; không ghi raw message/stack.
+
+## Product và commerce boundary
+
+MVP miễn phí được quyết định trong `MvpProductPolicy`, không phụ thuộc account. Feature gate vẫn là authoritative execution boundary; việc ẩn button không thay thế authorization.
+
+Các adapter OAuth/PKCE, DPAPI session, catalog, checkout, restore và signed entitlement đã có ở client nhưng chỉ hoạt động khi đủ biến môi trường. Chúng là **dormant/conditional**. Repository không chứa identity server, payment authority, webhook handler, purchase ledger hay entitlement issuer.
+
+## Translation provider và production gap
+
+Composition root hiện tạo:
+
+```text
+ConsentCheckingTextTranslator
+-> DeferredTextTranslator
+-> GoogleCloudTextTranslator
+```
+
+Google adapter dùng Application Default Credentials. Cấu trúc này phù hợp development nhưng chưa đáp ứng package sạch cho khách hàng. Target production cần một Translation Gateway hoặc cơ chế credential không phát hành secret trong desktop; quyết định này chưa được hiện thực trong repo.
+
+## Build, distribution và release
+
+- `.NET 10` và Node 24 là toolchain build.
+- MSBuild chạy `npm ci` khi cần, `npm run build`, rồi copy asset frontend vào output/publish.
+- `scripts/package-msix.ps1` tạo self-contained MSIX, App Installer và checksum; production signing fail closed.
+- CI chạy frontend check/build, Release build/test, dependency audit và unsigned packaging smoke.
+- Release-candidate workflow có protected environment, certificate validation, signature/timestamp/hash và provenance.
+
+Các workflow này chưa thay thế bằng chứng vận hành thật: certificate, HTTPS host, WebView2 bootstrap/dependency, signed clean-VM install/update/rollback và release promotion vẫn là external prerequisite.
+
+## Target boundary còn thiếu
+
+```text
+Desktop client
+  -> Translation Gateway (free MVP, chưa có)
+  -> OAuth/Account API (deferred)
+  -> Catalog/Checkout/Restore API (deferred)
+  -> Signed Entitlement API/issuer (deferred)
+  -> Payment provider + verified webhook/reconciliation (deferred)
+```
+
+Không chọn database hoặc topology dịch vụ trong tài liệu as-built. Những quyết định đó phải được ghi bằng ADR sau khi có backend repository và ownership rõ ràng.
+
+## Nguyên tắc thay đổi
+
+- Không đưa provider construction hoặc realtime loop vào React/WPF event handler.
+- Không hard-code document behavior vào shared contract.
+- Không cho catalog/redirect/payment response phía client tự cấp quyền.
+- Mọi remote adapter phải bounded, cancellable, HTTPS-only và trả lỗi an toàn.
+- Thay đổi geometry/overlay phải có test tập trung và visual QA ở nhiều DPI.
+

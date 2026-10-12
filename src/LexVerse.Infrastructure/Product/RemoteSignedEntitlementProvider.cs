@@ -55,14 +55,16 @@ public sealed class RemoteSignedEntitlementProvider : IEntitlementProvider
         IEntitlementRequestContextProvider contextProvider,
         EntitlementEnvelopeVerifier verifier,
         SignedEntitlementFileCache cache,
-        TimeSpan? requestTimeout = null)
+        TimeSpan? requestTimeout = null,
+        bool allowInsecureLocalhost = false)
         : this(
             httpClient,
             endpoint,
             subjectId: "dynamic-subject",
             verifier,
             cache,
-            requestTimeout)
+            requestTimeout,
+            allowInsecureLocalhost)
     {
         ArgumentNullException.ThrowIfNull(contextProvider);
         _subjectId = null;

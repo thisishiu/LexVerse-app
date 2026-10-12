@@ -16,15 +16,18 @@ public sealed class WindowsRealtimePipelineSessionFactory : IRealtimePipelineSes
     private readonly ITextTranslator _translator;
     private readonly ITranslationCache _translationCache;
     private readonly WindowsMonitorService _monitorService;
+    private readonly Func<RealtimeTranslationRequest, ITextTranslator>? _translatorFactory;
 
     public WindowsRealtimePipelineSessionFactory(
         ITextTranslator translator,
         ITranslationCache? translationCache = null,
-        WindowsMonitorService? monitorService = null)
+        WindowsMonitorService? monitorService = null,
+        Func<RealtimeTranslationRequest, ITextTranslator>? translatorFactory = null)
     {
         _translator = translator ?? throw new ArgumentNullException(nameof(translator));
         _translationCache = translationCache ?? new InMemoryTranslationCache();
         _monitorService = monitorService ?? new WindowsMonitorService();
+        _translatorFactory = translatorFactory;
     }
 
     public async Task<IRealtimePipelineSession> CreateAsync(
@@ -72,7 +75,7 @@ public sealed class WindowsRealtimePipelineSessionFactory : IRealtimePipelineSes
                 captureSession,
                 new ExactFrameChangeDetector(),
                 ocrService,
-                _translator,
+                _translatorFactory?.Invoke(request) ?? _translator,
                 _translationCache,
                 request.Options,
                 regionProvider);

@@ -1,140 +1,96 @@
-# LexVerse Future OCR And Translation Plan
+# Kế hoạch OCR và dịch sau MVP
 
-This file is the handoff note for future development. If this thread context is lost, ask Codex to read this file first.
+Tài liệu này chỉ mô tả hướng mở rộng sau khi Popup/Quick text và Document-region đạt tiêu chí production trong [MVP_PRODUCTION_SCOPE.md](MVP_PRODUCTION_SCOPE.md). Hiện trạng chuẩn nằm ở [PROJECT_STATE.md](PROJECT_STATE.md).
 
-## Current State
+## Nền tảng đã có
 
-LexVerse currently has a working OCR demo flow:
-
-```text
-Windows Graphics Capture -> frame change check -> Windows OCR -> WPF demo display
-```
-
-The solution builds successfully, but it is not yet a complete real-time screen translator. Translation, overlay rendering, user-selectable OCR regions, mode-specific OCR behavior, and real tests still need to be added.
-
-## Direction
-
-Do not hard-code one OCR behavior into the UI. Keep the pipeline flexible so each use case can choose a different region strategy, trigger strategy, and interval.
-
-Target pipeline:
+LexVerse đã có pipeline end-to-end, không còn ở trạng thái OCR demo:
 
 ```text
-Capture
--> Select OCR region
--> Decide whether OCR should run
--> OCR
--> Normalize text
--> Translation cache lookup
--> Translate only when cache misses
--> Overlay/display result
+Windows Graphics Capture
+-> chọn OCR region
+-> frame-change/trigger policy
+-> Windows OCR
+-> normalize và group text block
+-> translation cache
+-> external translation cho cache miss
+-> map frame pixel sang physical screen
+-> native WPF overlay
 ```
 
-## Modes To Support Later
+Các contract/policy đã tồn tại:
 
-### Subtitle Mode
+- `IOcrRegionProvider`, `IOcrTriggerPolicy`, `OcrProcessingMode` và `RealtimeTranslationOptions`.
+- `IOcrService`, `IOcrTextNormalizer`, layout grouping và comic speech-bubble grouping dựa trên text geometry.
+- `ITextTranslator`, `ITranslationCache`, `TranslationCacheKey` và `InMemoryTranslationCache`.
+- `CoordinateMapper`, `OverlayRenderFrame` và `RealtimeTranslationCoordinator`.
+- Policy/budget cho Document, FullScreen, Comic, Subtitle và GameDialogue.
 
-- User selects the subtitle area.
-- OCR runs on a short interval, around 500-700 ms.
-- Translation cache prevents translating the same subtitle repeatedly.
-- Prefer not to use full-screen percentage change detection, because subtitle changes may affect only a tiny part of the screen.
+Production UI hiện chỉ expose Document-region. Việc có option/policy cho mode khác không đồng nghĩa các mode đó đã sẵn sàng phát hành.
 
-### Game Dialogue Mode
+## Nguyên tắc mở rộng
 
-- User selects the dialogue box or text area.
-- OCR interval can be faster, around 300-500 ms.
-- Small changes inside the selected region should be enough to trigger OCR.
-- Cache repeated dialogue lines.
+- Mỗi mode được phép có region, trigger, cadence, grouping, cache, prompt và overlay policy riêng.
+- Shared contract không được hard-code hành vi Document.
+- Ưu tiên selected region thay vì full screen để giảm OCR cost và tránh bỏ lỡ thay đổi nhỏ.
+- Cache key tối thiểu phải chứa normalized text, source language, target language, mode và prompt key.
+- Overlay phải giữ coordinate-space rõ ràng giữa frame pixel, physical screen pixel và DIP.
+- Mỗi mode mới cần automated test cho policy/geometry/cache và visual dataset riêng.
 
-### Document Or Manga Mode
+## Hướng phát triển theo mode
 
-- User selects a page area, panel, speech bubble, or text block.
-- OCR can be manual, interval-based, or triggered after the image becomes stable.
-- Prioritize accuracy over speed.
-- Cache normalized text so zooming, panning, or revisiting a panel does not call translation again for the same content.
+### Full screen
 
-### Full Screen Mode
+Trạng thái: pipeline option và feature key đã có; dormant ngoài MVP.
 
-- OCR the full capture area.
-- Use sparingly because it is the heaviest mode.
-- Prefer slower interval or stronger filtering.
-- Cache translations here too.
+- Xác định đúng monitor và multi-monitor DPI.
+- Có cadence/filter mạnh hơn selected region.
+- Không OCR cửa sổ LexVerse; xác minh display-affinity fallback trên các bản Windows hỗ trợ.
+- Đặt memory/latency budget và soak-test riêng.
 
-## Contracts Added For This Direction
+### Comic/manga
 
-These Core contracts were added so future features can plug in without rewriting the whole app:
+Trạng thái: text-geometry grouping đã có; image-based balloon segmentation chưa có.
 
-```text
-src/LexVerse.Core/Pipeline/OcrProcessingMode.cs
-src/LexVerse.Core/Pipeline/OcrRegion.cs
-src/LexVerse.Core/Pipeline/IOcrRegionProvider.cs
-src/LexVerse.Core/Pipeline/IOcrTriggerPolicy.cs
-src/LexVerse.Core/Pipeline/RealtimeTranslationOptions.cs
-src/LexVerse.Core/Ocr/IOcrTextNormalizer.cs
-src/LexVerse.Core/Ocr/WhitespaceOcrTextNormalizer.cs
-src/LexVerse.Core/Translation/ITranslationService.cs
-src/LexVerse.Core/Translation/ITranslationCache.cs
-src/LexVerse.Core/Translation/TranslationCacheKey.cs
-src/LexVerse.Core/Translation/InMemoryTranslationCache.cs
-```
+- Duy trì one-bubble/one-overlay và reading order.
+- Không coi toàn bộ text viết hoa là acronym cần giữ nguyên.
+- Bổ sung dataset cho bubble lệch, lồng nhau, không đều và nhiều cột.
+- Chỉ thêm image segmentation nếu geometry grouping không đạt benchmark.
 
-## How Future Code Should Use These Contracts
+### Subtitle/movie
 
-UI should only collect user choices:
+Trạng thái: option/budget đã có; UX và E2E chưa có.
 
-```text
-mode
-source language
-target language
-selected OCR region
-start/stop
-```
+- Region nhỏ, cadence nhanh, debounce theo nội dung.
+- Xóa subtitle cũ đúng lúc và tránh flicker khi frame thay đổi nhẹ.
+- Đo capture-to-overlay p50/p95 trên video thật.
 
-Pipeline/service code should own the actual work:
+### Game dialogue
 
-```text
-capture loop
-OCR scheduling
-text normalization
-cache lookup
-translation call
-overlay update
-```
+Trạng thái: option/budget đã có; UX và E2E chưa có.
 
-Translation cache keys should use normalized text:
+- Region/trigger theo hộp thoại và hotkey phù hợp game.
+- Glossary/ignored terms và prompt riêng theo trò chơi.
+- Kiểm tra exclusive/full-screen behavior, focus và anti-cheat compatibility trước khi phát hành.
 
-```text
-normalized source text + source language + target language + mode
-```
+## Provider dịch tương lai
 
-This avoids translating the same sentence again because of whitespace, line breaks, or repeated frames.
+Google Cloud Translation V2 hiện không thực thi `TranslationPromptOptions.Instruction` như AI prompt. Provider prompt-aware tương lai phải:
 
-## Recommended Next Steps
+- dùng contract hiện có thay vì bypass consent/cache;
+- có bounded batch, timeout, cancellation và stable error code;
+- định nghĩa privacy/retention/cost/fallback;
+- tách provider credential khỏi desktop package;
+- test cache key khi prompt/style thay đổi.
 
-1. Add a real `LexVerse.Translation` project.
-2. Implement a mock translation service first, then add a real provider later.
-3. Refactor the WPF demo so it calls a pipeline service instead of owning the whole OCR loop.
-4. Add user-selectable OCR regions.
-5. Add overlay rendering in a separate `LexVerse.Overlay` project.
-6. Add tests for:
-   - `WhitespaceOcrTextNormalizer`
-   - `InMemoryTranslationCache`
-   - `ExactFrameChangeDetector`
-   - future trigger policies
-   - future pipeline cache behavior
-7. Add mode implementations:
-   - subtitle interval policy
-   - game dialogue interval or region-change policy
-   - document/manual policy
-   - full-screen slower interval policy
+Translation Gateway cho free MVP là khoảng trống production ưu tiên cao hơn các mode sau MVP.
 
-## Important Performance Notes
+## Thứ tự đề xuất
 
-Avoid running OCR on the full screen whenever possible. OCR should usually run on a selected region. Pixel comparison across the whole frame is expensive, and a tiny subtitle change can be missed if the threshold is based on the whole screen.
+1. Hoàn thiện Translation Gateway và evidence cho hai workflow MVP.
+2. Thiết lập image/text benchmark, latency budget và visual acceptance cho từng mode.
+3. Đưa Full screen vào internal test trước vì pipeline gần hoàn chỉnh nhất.
+4. Hoàn thiện Comic geometry benchmark rồi mới quyết định segmentation.
+5. Thử Subtitle và Game với policy độc lập, không thêm conditional lớn vào UI/pipeline chung.
+6. Chỉ expose mode khi feature gate, settings, accessibility, telemetry và clean-VM E2E đều đạt.
 
-Prefer this for movie/game scenarios:
-
-```text
-selected region + interval OCR + normalized text cache
-```
-
-This is simple, avoids missing small text changes, and prevents repeated translation API calls.
