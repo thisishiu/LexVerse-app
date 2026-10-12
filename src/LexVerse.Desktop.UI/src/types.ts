@@ -1,5 +1,6 @@
 export type CommandType =
   | "app.getSnapshot"
+  | "app.uiReady"
   | "translation.translateQuickText"
   | "realtime.selectRegion"
   | "realtime.start"

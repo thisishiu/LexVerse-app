@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using LexVerse.Application.Modules;
@@ -31,7 +30,15 @@ public partial class MainWindow : Window
     private readonly IFeatureAccessService _featureAccessService;
     private readonly CommerceCoordinator _commerce;
     private readonly IPrivacyPreferencesService _privacyPreferences;
-    private bool _isUpdatingPrivacyUi;
+    private readonly int _moduleCount;
+    private string _sourceLanguage = "auto";
+    private string _targetLanguage = "vi";
+    private string _hotkeyStatus = "F6 starting";
+    private string _status = "Starting workspace...";
+    private bool IsRealtimeRunning => _realtimeModule.Coordinator.State.Status is
+        RealtimeCoordinatorStatus.Starting or RealtimeCoordinatorStatus.Running;
+    private bool CanStartRegion => _regionAccessAllowed &&
+        _privacyPreferences.Current.AllowRemoteTextProcessing && !IsRealtimeRunning && !_isSelectingRegion;
     private bool _regionAccessAllowed;
     private bool _fullScreenAccessAllowed;
     private CancellationTokenSource? _popupCancellation;
@@ -66,8 +73,7 @@ public partial class MainWindow : Window
         _privacyPreferences = privacyPreferences;
         InitializeComponent();
         InitializeHybridUiHost();
-        ApplyPrivacyPreferences(_privacyPreferences.Current);
-        ModuleCountText.Text = $"{modules.Modules.Count} module registered by the composition root";
+        _moduleCount = modules.Modules.Count;
         _realtimeModule.Coordinator.StateChanged += RealtimeCoordinator_StateChanged;
         _realtimeModule.Coordinator.FrameProcessed += RealtimeCoordinator_FrameProcessed;
         _commerce.StateChanged += Commerce_StateChanged;
@@ -85,7 +91,7 @@ public partial class MainWindow : Window
         }
         catch
         {
-            StatusText.Text = "Account and plan information is temporarily unavailable.";
+            _status = "Account and plan information is temporarily unavailable.";
         }
 
         await RefreshFeatureAccessAsync();
@@ -94,177 +100,30 @@ public partial class MainWindow : Window
     private void PrivacyPreferences_Changed(object? sender, PrivacyPreferences preferences) =>
         Dispatcher.BeginInvoke(async () =>
         {
-            ApplyPrivacyPreferences(preferences);
             await RefreshFeatureAccessAsync();
         });
 
-    private void ApplyPrivacyPreferences(PrivacyPreferences preferences)
-    {
-        _isUpdatingPrivacyUi = true;
-        try
-        {
-            RemoteProcessingCheckBox.IsChecked = preferences.AllowRemoteTextProcessing;
-            LocalDiagnosticsCheckBox.IsChecked = preferences.AllowLocalDiagnostics;
-        }
-        finally
-        {
-            _isUpdatingPrivacyUi = false;
-        }
-
-        PublishDesktopSnapshot();
-    }
-
-    private async void PrivacySetting_Changed(object sender, RoutedEventArgs e)
-    {
-        if (_isUpdatingPrivacyUi)
-        {
-            return;
-        }
-
-        var current = _privacyPreferences.Current;
-        var allowRemote = RemoteProcessingCheckBox.IsChecked == true;
-        if (allowRemote && !current.AllowRemoteTextProcessing)
-        {
-            var confirmation = MessageBox.Show(
-                "LexVerse will send selected, typed, or OCR text to the configured translation provider. Operational metrics never include that text. Continue?",
-                "Allow external text processing",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Information);
-            if (confirmation != MessageBoxResult.Yes)
-            {
-                ApplyPrivacyPreferences(current);
-                return;
-            }
-        }
-
-        try
-        {
-            var updated = new PrivacyPreferences(
-                allowRemote,
-                LocalDiagnosticsCheckBox.IsChecked == true);
-            await _privacyPreferences.UpdateAsync(updated);
-            if (!updated.AllowRemoteTextProcessing)
-            {
-                await _realtimeModule.Coordinator.StopAsync();
-            }
-
-            StatusText.Text = "Privacy preferences saved.";
-        }
-        catch
-        {
-            ApplyPrivacyPreferences(current);
-            StatusText.Text = "Privacy preferences could not be saved.";
-        }
-    }
-
     private void Commerce_StateChanged(object? sender, CommerceState state) =>
-        Dispatcher.BeginInvoke(() => RenderCommerceState(state));
-
-    private void RenderCommerceState(CommerceState state)
-    {
-        var busy = state.Status == CommerceStatus.Loading;
-        CommercePanel.Visibility = state.Status == CommerceStatus.Unconfigured
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-        AccountStatusText.Text = state.Status switch
-        {
-            CommerceStatus.Unconfigured => "FREE MODE",
-            CommerceStatus.SignedOut => "SIGNED OUT",
-            CommerceStatus.Ready => "SIGNED IN",
-            CommerceStatus.CheckoutOpened => "CHECKOUT",
-            CommerceStatus.Error => "RETRY",
-            _ => "LOADING"
-        };
-        AccountDetailText.Text = state.Status switch
-        {
-            CommerceStatus.Unconfigured => "The production MVP is available without an account.",
-            CommerceStatus.SignedOut => "Sign in to purchase, restore, or use paid features.",
-            CommerceStatus.Ready => $"Signed in as {state.Account?.DisplayName}.",
-            CommerceStatus.CheckoutOpened => "Checkout opened in your browser. Use Restore / refresh when complete.",
-            CommerceStatus.Error => "Could not reach the account service. Check the network and retry.",
-            _ => "Loading account and current plans..."
-        };
-
-        var selectedOfferId = (OfferBox.SelectedItem as ComboBoxItem)?.Tag as string;
-        OfferBox.Items.Clear();
-        var catalog = state.Catalog;
-        var publicOffers = catalog?.Offers
-            .Where(offer => offer.IsPublic)
-            .OrderBy(offer => offer.Price.Amount)
-            ?? Enumerable.Empty<ProductOffer>();
-        foreach (var offer in publicOffers)
-        {
-            var plan = catalog?.FindPlan(offer.PlanId);
-            if (plan is not { IsPublic: true })
-            {
-                continue;
-            }
-
-            var period = offer.BillingPeriod is null
-                ? "one-time"
-                : $"every {offer.BillingPeriod.Count} {offer.BillingPeriod.Unit.ToString().ToLowerInvariant()}";
-            OfferBox.Items.Add(new ComboBoxItem
-            {
-                Content = $"{plan.DisplayName} · {offer.Price.Amount:N0} {offer.Price.CurrencyCode} · {period}",
-                Tag = offer.Id
-            });
-        }
-
-        OfferBox.SelectedItem = OfferBox.Items
-            .OfType<ComboBoxItem>()
-            .FirstOrDefault(item => string.Equals(item.Tag as string, selectedOfferId, StringComparison.Ordinal))
-            ?? OfferBox.Items.OfType<ComboBoxItem>().FirstOrDefault();
-        var signedIn = state.Account is not null;
-        SignInButton.IsEnabled = !busy && state.Status != CommerceStatus.Unconfigured && !signedIn;
-        SignOutButton.IsEnabled = !busy && signedIn;
-        RestoreButton.IsEnabled = !busy && signedIn;
-        OfferBox.IsEnabled = !busy && OfferBox.Items.Count > 0;
-        BuyButton.IsEnabled = !busy && signedIn && OfferBox.SelectedItem is not null;
-        PublishDesktopSnapshot();
-    }
-
-    private async void SignIn_Click(object sender, RoutedEventArgs e) =>
-        await RunCommerceOperationAsync(_commerce.SignInAsync, "Opening secure sign-in in your browser...");
-
-    private async void SignOut_Click(object sender, RoutedEventArgs e) =>
-        await RunCommerceOperationAsync(_commerce.SignOutAsync, "Signing out...");
-
-    private async void Restore_Click(object sender, RoutedEventArgs e) =>
-        await RunCommerceOperationAsync(_commerce.RestorePurchasesAsync, "Restoring purchases and refreshing access...");
-
-    private async void Buy_Click(object sender, RoutedEventArgs e)
-    {
-        if ((OfferBox.SelectedItem as ComboBoxItem)?.Tag is not string offerId)
-        {
-            return;
-        }
-
-        await RunCommerceOperationAsync(
-            token => _commerce.StartCheckoutAsync(offerId, token),
-            "Creating secure checkout...");
-    }
-
-    private void OfferBox_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
-        BuyButton.IsEnabled = _commerce.State.Account is not null && OfferBox.SelectedItem is not null;
+        Dispatcher.BeginInvoke(() => PublishDesktopSnapshot());
 
     private async Task RunCommerceOperationAsync(
         Func<CancellationToken, Task> operation,
         string status)
     {
-        StatusText.Text = status;
+        _status = status;
         try
         {
             await operation(CancellationToken.None);
             await RefreshFeatureAccessAsync();
-            StatusText.Text = "Account and feature access updated.";
+            _status = "Account and feature access updated.";
         }
         catch (OperationCanceledException)
         {
-            StatusText.Text = "Account operation canceled.";
+            _status = "Account operation canceled.";
         }
         catch
         {
-            StatusText.Text = "Account operation failed. Check the network and try again.";
+            _status = "Account operation failed. Check the network and try again.";
         }
     }
 
@@ -274,24 +133,6 @@ public partial class MainWindow : Window
         var fullScreen = await _featureAccessService.GetAccessAsync(ProductFeatures.FullScreenTranslation);
         _regionAccessAllowed = region.IsAllowed;
         _fullScreenAccessAllowed = fullScreen.IsAllowed;
-        var remoteProcessingAllowed = _privacyPreferences.Current.AllowRemoteTextProcessing;
-        QuickTranslateButton.IsEnabled = remoteProcessingAllowed;
-        RegionButton.IsEnabled = _regionAccessAllowed && remoteProcessingAllowed;
-        FullScreenButton.IsEnabled = _fullScreenAccessAllowed && remoteProcessingAllowed;
-        PopupStatusText.Text = remoteProcessingAllowed ? "ACTIVE" : "CONSENT";
-        RegionButton.Content = !_regionAccessAllowed
-            ? "Document region \u00B7 unavailable"
-            : remoteProcessingAllowed ? "Select document region" : "Document region \u00B7 consent";
-        FullScreenButton.Content = !_fullScreenAccessAllowed
-            ? "Full screen \u00B7 locked"
-            : remoteProcessingAllowed ? "Full screen" : "Full screen \u00B7 consent";
-        RealtimeStatusText.Text = !remoteProcessingAllowed
-            ? "CONSENT"
-            : _regionAccessAllowed ? "READY" : "UNAVAILABLE";
-        RealtimeStatusText.Foreground = (System.Windows.Media.Brush)FindResource(
-            remoteProcessingAllowed && _regionAccessAllowed
-                ? "SuccessBrush"
-                : "AccentBrush");
         PublishDesktopSnapshot();
     }
 
@@ -304,22 +145,17 @@ public partial class MainWindow : Window
         _hwndSource?.AddHook(WndProc);
         _ = SetWindowDisplayAffinity(handle, WdaExcludeFromCapture);
         _hotkeyRegistered = RegisterHotKey(handle, HotkeyId, ModNoRepeat, VkF6);
-        HotkeyStatusText.Text = _hotkeyRegistered ? "F6 ready" : "F6 unavailable";
-        StatusText.Text = _hotkeyRegistered
+        _hotkeyStatus = _hotkeyRegistered ? "F6 ready" : "F6 unavailable";
+        _status = _hotkeyRegistered
             ? "Ready. Highlight text in another app and press F6."
             : "F6 is used by another app. Quick text remains available.";
     }
 
-    private async void TranslateQuickText_Click(object sender, RoutedEventArgs e) =>
-        await TranslateQuickTextAsync();
-
-    private async Task TranslateQuickTextAsync()
+    private async Task TranslateQuickTextAsync(string text)
     {
-        var text = QuickTextBox.Text;
         if (string.IsNullOrWhiteSpace(text))
         {
-            StatusText.Text = "Enter text in Quick text first.";
-            QuickTextBox.Focus();
+            _status = "Enter text in Quick text first.";
             return;
         }
 
@@ -328,15 +164,6 @@ public partial class MainWindow : Window
             "Translating quick text…",
             translation => _lastQuickTranslation = translation);
     }
-
-    private void MinimizeForHotkey_Click(object sender, RoutedEventArgs e)
-    {
-        WindowState = WindowState.Minimized;
-        StatusText.Text = "Highlight text in another app and press F6.";
-    }
-
-    private async void StartRegionRealtime_Click(object sender, RoutedEventArgs e) =>
-        await StartRegionRealtimeAsync();
 
     private async Task StartRegionRealtimeAsync()
     {
@@ -358,7 +185,7 @@ public partial class MainWindow : Window
 
             if (selected != true || selector.Selection is not { } selection)
             {
-                StatusText.Text = "Region selection canceled.";
+                _status = "Region selection canceled.";
                 return;
             }
 
@@ -371,11 +198,9 @@ public partial class MainWindow : Window
         finally
         {
             _isSelectingRegion = false;
+            PublishDesktopSnapshot();
         }
     }
-
-    private async void StartFullScreenRealtime_Click(object sender, RoutedEventArgs e) =>
-        await StartFullScreenRealtimeAsync();
 
     private async Task StartFullScreenRealtimeAsync()
     {
@@ -391,25 +216,22 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void StopRealtime_Click(object sender, RoutedEventArgs e) =>
-        await StopRealtimeAsync();
-
     private async Task StopRealtimeAsync()
     {
         try
         {
             await _realtimeModule.Coordinator.StopAsync();
-            StatusText.Text = "Realtime translation stopped.";
+            _status = "Realtime translation stopped.";
         }
         catch
         {
-            StatusText.Text = "Realtime cleanup did not finish normally.";
+            _status = "Realtime cleanup did not finish normally.";
         }
     }
 
     private Task StartRealtimeAsync(RealtimeCaptureKind kind, LexVerse.Core.Geometry.ScreenRect bounds)
     {
-        StatusText.Text = kind == RealtimeCaptureKind.Region
+        _status = kind == RealtimeCaptureKind.Region
             ? "Starting selected-region translation…"
             : "Starting full-screen translation…";
         var request = new RealtimeTranslationRequest(
@@ -422,16 +244,16 @@ public partial class MainWindow : Window
 
     private RealtimeTranslationOptions CreateRealtimeOptions()
     {
-        var sourceLanguage = GetSelectedTag(SourceLanguageBox);
+        var sourceLanguage = _sourceLanguage;
 
         return RealtimeTranslationOptions.Document with
         {
             SourceLanguage = sourceLanguage,
-            TargetLanguage = GetSelectedTag(TargetLanguageBox)
+            TargetLanguage = _targetLanguage
         };
     }
 
-    private string GetOcrLanguageTag() => GetSelectedTag(SourceLanguageBox) switch
+    private string GetOcrLanguageTag() => _sourceLanguage switch
     {
         "ja" => "ja-JP",
         "ko" => "ko-KR",
@@ -444,16 +266,9 @@ public partial class MainWindow : Window
     {
         Dispatcher.BeginInvoke(() =>
         {
-            var running = state.Status is RealtimeCoordinatorStatus.Starting or RealtimeCoordinatorStatus.Running;
-            var remoteProcessingAllowed = _privacyPreferences.Current.AllowRemoteTextProcessing;
-            RegionButton.IsEnabled = _regionAccessAllowed && remoteProcessingAllowed && !running && !_isSelectingRegion;
-            FullScreenButton.IsEnabled = _fullScreenAccessAllowed && remoteProcessingAllowed && !running;
-            StopRealtimeButton.IsEnabled = running;
-            RealtimeStatusText.Text = state.Status.ToString().ToUpperInvariant();
-
             if (state.Status == RealtimeCoordinatorStatus.Faulted)
             {
-                StatusText.Text = "Realtime pipeline stopped after an error. Check provider and OCR availability.";
+                _status = "Realtime pipeline stopped after an error. Check provider and OCR availability.";
             }
 
             PublishDesktopSnapshot();
@@ -464,12 +279,12 @@ public partial class MainWindow : Window
     {
         Dispatcher.BeginInvoke(() =>
         {
-            StatusText.Text = update.UsedCachedTranslation
+            _status = update.UsedCachedTranslation
                 ? $"Realtime: cached frame · {update.Timing.Total.TotalMilliseconds:0} ms"
                 : $"Realtime: OCR {update.OcrBlockCount}, translated {update.TranslatedBlockCount} · {update.Timing.Total.TotalMilliseconds:0} ms";
             if (update.PerformanceBudgetExceeded)
             {
-                StatusText.Text += " · slower than target";
+                _status += " · slower than target";
             }
 
             UpdateDesktopFrameTiming(update.Timing.Total.TotalMilliseconds, update.PerformanceBudgetExceeded);
@@ -479,7 +294,7 @@ public partial class MainWindow : Window
 
     private void ShowRealtimeStartError(Exception exception)
     {
-        StatusText.Text = exception is FeatureAccessDeniedException denied
+        _status = exception is FeatureAccessDeniedException denied
             ? $"Realtime access unavailable: {denied.Decision.DenialReason}."
             : "Could not start realtime translation. Check capture permission, OCR language, and provider setup.";
     }
@@ -503,9 +318,8 @@ public partial class MainWindow : Window
         var cancellationToken = cancellation.Token;
         var popup = new TranslationPopupWindow();
 
-        StatusText.Text = loadingStatus;
-        QuickTranslateButton.IsEnabled = false;
-
+        _status = loadingStatus;
+        PublishDesktopSnapshot();
         try
         {
             var operationTask = operation(cancellationToken);
@@ -519,7 +333,7 @@ public partial class MainWindow : Window
             if (!result.HasSelection || result.Translation is null || result.SourceText is null)
             {
                 popup.Close();
-                StatusText.Text = "No highlighted text found. Select text and try F6 again.";
+                _status = "No highlighted text found. Select text and try F6 again.";
                 return;
             }
 
@@ -533,7 +347,7 @@ public partial class MainWindow : Window
                 result.Translation.TranslatedText,
                 GetTargetLanguageLabel());
             translationCompleted?.Invoke(result.Translation.TranslatedText);
-            StatusText.Text = "Translation complete.";
+            _status = "Translation complete.";
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -542,12 +356,12 @@ public partial class MainWindow : Window
         catch (RemoteProcessingConsentRequiredException)
         {
             popup.Close();
-            StatusText.Text = "Enable external text processing under Privacy before translating.";
+            _status = "Enable external text processing under Privacy before translating.";
         }
         catch (FeatureAccessDeniedException exception)
         {
             popup.Close();
-            StatusText.Text = $"Popup access unavailable: {exception.Decision.DenialReason}.";
+            _status = $"Popup access unavailable: {exception.Decision.DenialReason}.";
         }
         catch
         {
@@ -559,39 +373,37 @@ public partial class MainWindow : Window
             popup.ShowError(
                 "Translation unavailable",
                 "Check your provider credentials and network connection, then try again.");
-            StatusText.Text = "Translation provider unavailable.";
+            _status = "Translation provider unavailable.";
         }
         finally
         {
-            QuickTranslateButton.IsEnabled = _privacyPreferences.Current.AllowRemoteTextProcessing;
             if (ReferenceEquals(_popupCancellation, cancellation))
             {
                 _popupCancellation = null;
             }
 
             cancellation.Dispose();
+            PublishDesktopSnapshot();
         }
     }
 
     private PopupTranslationRequest CreateRequest()
     {
-        var sourceLanguage = GetSelectedTag(SourceLanguageBox);
+        var sourceLanguage = _sourceLanguage;
         return new PopupTranslationRequest(
-            GetSelectedTag(TargetLanguageBox),
+            _targetLanguage,
             sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase)
                 ? null
                 : sourceLanguage);
     }
 
-    private string GetTargetLanguageLabel() =>
-        TargetLanguageBox.SelectedItem is ComboBoxItem { Content: { } content }
-            ? content.ToString() ?? "Translation"
-            : "Translation";
+    private string GetTargetLanguageLabel() => _targetLanguage switch
+    {
+        "vi" => "Vietnamese", "en" => "English", "ja" => "Japanese",
+        "ko" => "Korean", "zh" => "Chinese", _ => "Translation"
+    };
 
-    private static string GetSelectedTag(ComboBox comboBox) =>
-        comboBox.SelectedItem is ComboBoxItem { Tag: { } tag }
-            ? tag.ToString() ?? string.Empty
-            : comboBox.Text.Trim();
+    private void CloseStartup_Click(object sender, RoutedEventArgs e) => Close();
 
     private IntPtr WndProc(
         IntPtr hwnd,
@@ -624,8 +436,10 @@ public partial class MainWindow : Window
         }
 
         _cleanupStarted = true;
+        _desktopUiLifetime?.Cancel();
+        _startupTimer?.Stop();
         IsEnabled = false;
-        StatusText.Text = "Stopping background work…";
+        _status = "Stopping background work…";
         try
         {
             await _realtimeModule.Coordinator.StopAsync();

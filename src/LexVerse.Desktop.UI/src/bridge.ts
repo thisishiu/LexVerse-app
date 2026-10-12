@@ -61,6 +61,10 @@ export class DesktopBridge {
   };
 
   constructor() {
+    this.connect();
+  }
+
+  connect() {
     this.transport?.addEventListener("message", this.onMessage);
   }
 

@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Threading;
 using LexVerse.Application.Desktop;
 using LexVerse.Application.Privacy;
@@ -17,6 +16,9 @@ public partial class MainWindow
     private readonly SemaphoreSlim _desktopCommandGate = new(1, 1);
     private CancellationTokenSource? _desktopUiLifetime;
     private DispatcherTimer? _desktopSnapshotTimer;
+    private DispatcherTimer? _startupTimer;
+    private bool _startupFailed;
+    private bool _snapshotRequested;
     private bool _desktopUiReady;
     private bool _desktopSnapshotPending;
     private double? _lastFrameMilliseconds;
@@ -42,8 +44,15 @@ public partial class MainWindow
             return;
         }
 
+        var token = lifetime.Token;
+        _startupTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _startupTimer.Tick += (_, _) => ShowStartupError("The workspace did not become ready within 30 seconds. Close LexVerse and try again.");
+        _startupTimer.Start();
         try
         {
+            var assetsPath = Path.Combine(AppContext.BaseDirectory, "DesktopUi");
+            if (!File.Exists(Path.Combine(assetsPath, "index.html")))
+                throw new FileNotFoundException("The packaged desktop UI is missing.");
             _ = CoreWebView2Environment.GetAvailableBrowserVersionString();
             var userDataFolder = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -51,17 +60,12 @@ public partial class MainWindow
                 "WebView2");
             Directory.CreateDirectory(userDataFolder);
             var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
+            token.ThrowIfCancellationRequested();
             await WebUi.EnsureCoreWebView2Async(environment);
-            lifetime.Token.ThrowIfCancellationRequested();
+            token.ThrowIfCancellationRequested();
 
             var core = WebUi.CoreWebView2;
             ConfigureWebViewSecurity(core);
-            var assetsPath = Path.Combine(AppContext.BaseDirectory, "DesktopUi");
-            if (!File.Exists(Path.Combine(assetsPath, "index.html")))
-            {
-                throw new FileNotFoundException("The packaged desktop UI is missing.");
-            }
-
             core.SetVirtualHostNameToFolderMapping(
                 DesktopUiHostName,
                 assetsPath,
@@ -70,16 +74,31 @@ public partial class MainWindow
             core.NavigationCompleted += WebUi_NavigationCompleted;
             core.Navigate($"{DesktopUiOrigin}/index.html");
         }
-        catch (Exception exception) when (exception is WebView2RuntimeNotFoundException
-                                          or IOException
-                                          or UnauthorizedAccessException
-                                          or InvalidOperationException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch (Exception exception)
         {
-            WebUi.Visibility = Visibility.Collapsed;
-            StatusText.Text = exception is WebView2RuntimeNotFoundException
-                ? "WebView2 Runtime is unavailable. Using the native control center."
-                : "The web control center could not load. Using the native fallback.";
+            if (!token.IsCancellationRequested)
+                ShowStartupError(exception switch
+                {
+                    WebView2RuntimeNotFoundException => "WebView2 Runtime is unavailable. Install Microsoft Edge WebView2 Runtime and restart LexVerse.",
+                    FileNotFoundException => "The packaged desktop UI is missing. Rebuild or reinstall LexVerse.",
+                    _ => "The workspace could not load. Close LexVerse and try again."
+                });
         }
+    }
+
+    private void ShowStartupError(string message)
+    {
+        if (_cleanupStarted || _startupFailed) return;
+        _startupFailed = true;
+        _desktopUiReady = false;
+        _startupTimer?.Stop();
+        _desktopUiLifetime?.Cancel();
+        WebUi.Visibility = Visibility.Collapsed;
+        StartupLoadingPanel.Visibility = Visibility.Visible;
+        StartupMessage.Text = message;
+        StartupProgress.Visibility = Visibility.Collapsed;
+        StartupCloseButton.Visibility = Visibility.Visible;
     }
 
     private void ConfigureWebViewSecurity(CoreWebView2 core)
@@ -110,14 +129,8 @@ public partial class MainWindow
     {
         if (!args.IsSuccess)
         {
-            WebUi.Visibility = Visibility.Collapsed;
-            StatusText.Text = "The web control center could not load. Using the native fallback.";
-            return;
+            ShowStartupError("The workspace page could not load. Close LexVerse and try again.");
         }
-
-        _desktopUiReady = true;
-        WebUi.Visibility = Visibility.Visible;
-        PublishDesktopSnapshot();
     }
 
     private async void WebUi_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
@@ -179,10 +192,22 @@ public partial class MainWindow
 
     private async Task<object?> ExecuteDesktopCommandAsync(DesktopBridgeCommand command)
     {
+        if (_cleanupStarted || _startupFailed)
+            throw new OperationCanceledException();
         switch (command.Type)
         {
             case "app.getSnapshot":
+                _snapshotRequested = true;
                 return BuildDesktopSnapshot();
+
+            case "app.uiReady":
+                if (!_snapshotRequested || _startupFailed || _cleanupStarted)
+                    throw new DesktopBridgePayloadException("workspace-not-ready");
+                _desktopUiReady = true;
+                _startupTimer?.Stop();
+                WebUi.Visibility = Visibility.Visible;
+                StartupLoadingPanel.Visibility = Visibility.Collapsed;
+                return null;
 
             case "translation.translateQuickText":
             {
@@ -192,10 +217,9 @@ public partial class MainWindow
                     throw new DesktopBridgePayloadException("invalid-text");
                 }
 
-                SelectLanguage(SourceLanguageBox, payload.SourceLanguage, allowAuto: true);
-                SelectLanguage(TargetLanguageBox, payload.TargetLanguage, allowAuto: false);
-                QuickTextBox.Text = payload.Text;
-                await TranslateQuickTextAsync();
+                _sourceLanguage = ValidateLanguage(payload.SourceLanguage, allowAuto: true);
+                _targetLanguage = ValidateLanguage(payload.TargetLanguage, allowAuto: false);
+                await TranslateQuickTextAsync(payload.Text);
                 return null;
             }
 
@@ -220,11 +244,11 @@ public partial class MainWindow
                 var payload = DesktopBridgeProtocol.DeserializePayload<SettingsPayload>(command.Payload);
                 if (payload.SourceLanguage is not null)
                 {
-                    SelectLanguage(SourceLanguageBox, payload.SourceLanguage, allowAuto: true);
+                    _sourceLanguage = ValidateLanguage(payload.SourceLanguage, allowAuto: true);
                 }
                 if (payload.TargetLanguage is not null)
                 {
-                    SelectLanguage(TargetLanguageBox, payload.TargetLanguage, allowAuto: false);
+                    _targetLanguage = ValidateLanguage(payload.TargetLanguage, allowAuto: false);
                 }
                 return null;
             }
@@ -294,52 +318,39 @@ public partial class MainWindow
             await _realtimeModule.Coordinator.StopAsync();
         }
         await RefreshFeatureAccessAsync();
-        StatusText.Text = "Privacy preferences saved.";
+        _status = "Privacy preferences saved.";
     }
 
-    private static void SelectLanguage(ComboBox comboBox, string language, bool allowAuto)
+    private static string ValidateLanguage(string language, bool allowAuto)
     {
-        if (string.IsNullOrWhiteSpace(language) ||
-            (!allowAuto && language.Equals("auto", StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new DesktopBridgePayloadException("invalid-language");
-        }
-
-        var item = comboBox.Items
-            .OfType<ComboBoxItem>()
-            .FirstOrDefault(candidate => string.Equals(
-                candidate.Tag?.ToString(),
-                language,
-                StringComparison.OrdinalIgnoreCase));
-        if (item is null)
-        {
-            throw new DesktopBridgePayloadException("invalid-language");
-        }
-
-        comboBox.SelectedItem = item;
+        var normalized = language?.ToLowerInvariant();
+        if (normalized is "en" or "ja" or "ko" or "zh" or "vi" || (allowAuto && normalized == "auto"))
+            return normalized;
+        throw new DesktopBridgePayloadException("invalid-language");
     }
 
     private object BuildDesktopSnapshot()
     {
         var commerce = _commerce.State;
-        var offers = OfferBox.Items
-            .OfType<ComboBoxItem>()
-            .Where(item => item.Tag is string)
-            .Select(item => new
+        var catalog = commerce.Catalog;
+        var offers = (catalog?.Offers ?? Enumerable.Empty<LexVerse.Core.Product.ProductOffer>())
+            .Where(offer => offer.IsPublic && catalog?.FindPlan(offer.PlanId) is { IsPublic: true })
+            .OrderBy(offer => offer.Price.Amount)
+            .Select(offer => new
             {
-                id = item.Tag!.ToString(),
-                label = item.Content?.ToString() ?? item.Tag!.ToString()
-            })
-            .ToArray();
+                id = offer.Id,
+                label = $"{catalog!.FindPlan(offer.PlanId)!.DisplayName} · {offer.Price.Amount:N0} {offer.Price.CurrencyCode} · " +
+                    (offer.BillingPeriod is null ? "one-time" : $"every {offer.BillingPeriod.Count} {offer.BillingPeriod.Unit.ToString().ToLowerInvariant()}")
+            }).ToArray();
         var realtime = _realtimeModule.Coordinator.State;
         return new
         {
-            moduleCount = 2,
-            status = StatusText.Text,
-            hotkey = HotkeyStatusText.Text,
+            moduleCount = _moduleCount,
+            status = _status,
+            hotkey = _hotkeyStatus,
             quickTranslation = _lastQuickTranslation,
-            sourceLanguage = GetSelectedTag(SourceLanguageBox),
-            targetLanguage = GetSelectedTag(TargetLanguageBox),
+            sourceLanguage = _sourceLanguage,
+            targetLanguage = _targetLanguage,
             privacy = new
             {
                 allowRemoteTextProcessing = _privacyPreferences.Current.AllowRemoteTextProcessing,
@@ -348,15 +359,23 @@ public partial class MainWindow
             realtime = new
             {
                 status = realtime.Status.ToString().ToLowerInvariant(),
-                canStartRegion = RegionButton.IsEnabled,
-                canStop = StopRealtimeButton.IsEnabled,
+                canStartRegion = CanStartRegion,
+                canStop = IsRealtimeRunning,
                 lastFrameMilliseconds = _lastFrameMilliseconds,
                 performanceBudgetExceeded = _lastFrameBudgetExceeded
             },
             commerce = new
             {
                 configured = commerce.Status != LexVerse.Application.Commerce.CommerceStatus.Unconfigured,
-                status = AccountStatusText.Text,
+                status = commerce.Status switch
+                {
+                    LexVerse.Application.Commerce.CommerceStatus.Unconfigured => "FREE MODE",
+                    LexVerse.Application.Commerce.CommerceStatus.SignedOut => "SIGNED OUT",
+                    LexVerse.Application.Commerce.CommerceStatus.Ready => "SIGNED IN",
+                    LexVerse.Application.Commerce.CommerceStatus.CheckoutOpened => "CHECKOUT",
+                    LexVerse.Application.Commerce.CommerceStatus.Error => "RETRY",
+                    _ => "LOADING"
+                },
                 displayName = commerce.Account?.DisplayName,
                 offers
             }
@@ -365,7 +384,7 @@ public partial class MainWindow
 
     private void PostDesktopResult(string id, bool ok, object? payload = null, string? errorCode = null)
     {
-        if (WebUi.CoreWebView2 is null)
+        if (_cleanupStarted || _startupFailed || WebUi.CoreWebView2 is null)
         {
             return;
         }
@@ -409,6 +428,8 @@ public partial class MainWindow
     private void ShutdownHybridUiHost()
     {
         _desktopUiReady = false;
+        _startupTimer?.Stop();
+        _startupTimer = null;
         _desktopUiLifetime?.Cancel();
         _desktopUiLifetime?.Dispose();
         _desktopUiLifetime = null;

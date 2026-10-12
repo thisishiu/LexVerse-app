@@ -14,13 +14,16 @@ export function useDesktopApp() {
 
   useEffect(() => {
     let active = true;
+    bridge.connect();
     bridge.command<DesktopSnapshot>("app.getSnapshot").then((next) => {
       if (!active) return;
       setSnapshot(next);
       setSourceLanguage(next.sourceLanguage);
       setTargetLanguage(next.targetLanguage);
       setSelectedOffer(next.commerce.offers[0]?.id ?? "");
-    }).catch(() => setError("The native workspace is unavailable."));
+    }).catch(() => {
+      if (active) setError("The native workspace is unavailable.");
+    });
 
     const unsubscribe = bridge.subscribe((event) => {
       if (event.type !== "app.snapshot") return;
@@ -35,6 +38,12 @@ export function useDesktopApp() {
       bridge.dispose();
     };
   }, [bridge]);
+
+  const hasSnapshot = !!snapshot;
+  useEffect(() => {
+    if (!hasSnapshot || !window.chrome?.webview) return;
+    void bridge.command("app.uiReady").catch(() => setError("The workspace could not become ready."));
+  }, [bridge, hasSnapshot]);
 
   async function run(label: string, action: () => Promise<unknown>) {
     setBusy(label);

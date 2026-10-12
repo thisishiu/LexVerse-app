@@ -1,6 +1,5 @@
 <Solution>
   <Folder Name="/samples/">
-    <Project Path="samples/LexVerse.Demo.Wpf/LexVerse.Demo.Wpf.csproj" />
     <Project Path="samples/LexVerse.Overlay.Sample/LexVerse.Overlay.Sample.csproj" />
     <Project Path="samples/LexVerse.Pipeline.Sample/LexVerse.Pipeline.Sample.csproj" />
   </Folder>
