@@ -61,7 +61,8 @@ public sealed class RemoteCommerceBackend : ICommerceBackend
             _httpClient, request, MaximumResponseBytes, _timeout, cancellationToken);
         var response = JsonSerializer.Deserialize<CheckoutWire>(bytes, JsonOptions)
             ?? throw new InvalidOperationException("The checkout response is empty.");
-        return new CheckoutSession(new Uri(response.CheckoutUri, UriKind.Absolute), response.ExpiresAtUtc);
+        return new CheckoutSession(new Uri(response.CheckoutUri, UriKind.Absolute), response.ExpiresAtUtc,
+            LexVerse.Infrastructure.Configuration.BackendEndpointPolicy.AllowInsecureLocalhost);
     }
 
     public async Task RestorePurchasesAsync(CancellationToken cancellationToken = default)

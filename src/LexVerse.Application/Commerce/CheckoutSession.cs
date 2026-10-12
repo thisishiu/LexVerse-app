@@ -2,10 +2,11 @@ namespace LexVerse.Application.Commerce;
 
 public sealed record CheckoutSession
 {
-    public CheckoutSession(Uri checkoutUri, DateTimeOffset expiresAtUtc)
+    public CheckoutSession(Uri checkoutUri, DateTimeOffset expiresAtUtc, bool allowInsecureLocalhost = false)
     {
         ArgumentNullException.ThrowIfNull(checkoutUri);
-        if (!checkoutUri.IsAbsoluteUri || checkoutUri.Scheme != Uri.UriSchemeHttps ||
+        if (!checkoutUri.IsAbsoluteUri || (checkoutUri.Scheme != Uri.UriSchemeHttps &&
+            !(allowInsecureLocalhost && checkoutUri.Scheme == Uri.UriSchemeHttp && checkoutUri.IsLoopback)) ||
             !string.IsNullOrEmpty(checkoutUri.UserInfo) || checkoutUri.AbsoluteUri.Length > 4096)
         {
             throw new ArgumentException("Checkout must use an absolute HTTPS URI.", nameof(checkoutUri));

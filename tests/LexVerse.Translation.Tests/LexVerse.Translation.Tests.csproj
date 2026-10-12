@@ -15,6 +15,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\..\..\lexverse-server\test\fixtures\node-entitlement.json" Link="Fixtures\node-entitlement.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\LexVerse.Application\LexVerse.Application.csproj" />
     <ProjectReference Include="..\..\src\LexVerse.Core\LexVerse.Core.csproj" />
     <ProjectReference Include="..\..\src\LexVerse.Infrastructure\LexVerse.Infrastructure.csproj" />

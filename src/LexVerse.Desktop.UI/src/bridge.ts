@@ -28,7 +28,7 @@ const initialPreview: DesktopSnapshot = {
     canStop: false,
     performanceBudgetExceeded: false
   },
-  commerce: { configured: false, status: "free mode", offers: [] }
+  commerce: { configured: false, status: "not connected", offers: [] }
 };
 
 export class DesktopBridge {

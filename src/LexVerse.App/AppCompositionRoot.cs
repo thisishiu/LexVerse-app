@@ -18,6 +18,7 @@ using LexVerse.Infrastructure.Realtime;
 using LexVerse.Infrastructure.Product;
 using LexVerse.Infrastructure.Privacy;
 using LexVerse.Infrastructure.Windows;
+using LexVerse.Infrastructure.Configuration;
 
 namespace LexVerse.App;
 
@@ -36,6 +37,7 @@ public sealed class AppCompositionRoot : IDisposable
         IOperationalTelemetry? telemetry = null,
         IPrivacyPreferencesService? privacyPreferences = null)
     {
+        BackendEndpointPolicy.LoadEnvironment();
         telemetry ??= NullOperationalTelemetry.Instance;
         if (privacyPreferences is null)
         {
@@ -53,14 +55,10 @@ public sealed class AppCompositionRoot : IDisposable
             _accountProvider,
             out _entitlementCache);
         _featureAccessService = new FeatureAccessService(entitlementProvider);
-        _accessService = new FreeTierFeatureAccessService(
-            _featureAccessService,
-            MvpProductPolicy.FreeFeatures);
+        _accessService = _featureAccessService;
         var featureGate = new FeatureGate(_accessService);
         var selectedTextReader = new WindowsSelectedTextReader();
-        ITextTranslator translator = new ConsentCheckingTextTranslator(
-            new DeferredTextTranslator(() => new GoogleCloudTextTranslator()),
-            _privacyPreferences);
+        ITextTranslator translator = CreateRemoteTranslator(["translation.popup"]);
         MonitorService = new WindowsMonitorService();
 
         PopupModule = new PopupFeatureModule(new PopupTranslationUseCase(
@@ -71,7 +69,14 @@ public sealed class AppCompositionRoot : IDisposable
         var realtimeOutput = new WpfRealtimeOverlayOutput(System.Windows.Application.Current.Dispatcher);
         var realtimeFactory = new WindowsRealtimePipelineSessionFactory(
             translator,
-            monitorService: MonitorService);
+            monitorService: MonitorService,
+            translatorFactory: request => CreateRemoteTranslator(new[] {
+                request.CaptureKind == LexVerse.Application.Realtime.RealtimeCaptureKind.Region ? "translation.region" : "translation.full-screen"
+            }.Concat(request.Options.Mode switch {
+                LexVerse.Core.Pipeline.OcrProcessingMode.Comic => new[] { "mode.comic" },
+                LexVerse.Core.Pipeline.OcrProcessingMode.Document => new[] { "mode.document" },
+                _ => Array.Empty<string>()
+            }).ToArray()));
         RealtimeModule = new RealtimeFeatureModule(new RealtimeTranslationCoordinator(
             featureGate,
             realtimeFactory,
@@ -160,7 +165,8 @@ public sealed class AppCompositionRoot : IDisposable
                 endpoint,
                 new AccountEntitlementRequestContextProvider(accounts),
                 verifier,
-                cache);
+                cache,
+                allowInsecureLocalhost: BackendEndpointPolicy.AllowInsecureLocalhost);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
@@ -251,4 +257,11 @@ public sealed class AppCompositionRoot : IDisposable
             out var uri)
             ? uri
             : null;
+
+    private ITextTranslator CreateRemoteTranslator(string[] features) =>
+        new ConsentCheckingTextTranslator(new DeferredTextTranslator(() =>
+            new RemoteTextTranslator(_backendHttpClient,
+                GetAbsoluteUri("LEXVERSE_TRANSLATION_ENDPOINT")
+                    ?? throw new InvalidOperationException("Configure LEXVERSE_TRANSLATION_ENDPOINT before translating."),
+                _accountProvider, features)), _privacyPreferences);
 }

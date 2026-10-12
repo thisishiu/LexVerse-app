@@ -108,6 +108,28 @@ public sealed class OAuthPkceAccountSessionProvider : IAccountSessionProvider, I
         await _gate.WaitAsync(cancellationToken);
         try
         {
+            var stored = await _store.ReadAsync(cancellationToken);
+            var endpointText = Environment.GetEnvironmentVariable("LEXVERSE_LOGOUT_ENDPOINT");
+            if (stored is not null && Uri.TryCreate(endpointText, UriKind.Absolute, out var endpoint))
+            {
+                RemoteProductCatalogProvider.ValidateHttps(endpoint, nameof(endpoint));
+                using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", stored.AccessToken);
+                if (!string.IsNullOrWhiteSpace(stored.RefreshToken))
+                {
+                    request.Content = new StringContent(JsonSerializer.Serialize(new { refresh_token = stored.RefreshToken }), Encoding.UTF8, "application/json");
+                }
+                try
+                {
+                    _ = await HttpJson.ReadBoundedAsync(_httpClient, request, MaximumOAuthResponseBytes,
+                        TimeSpan.FromSeconds(10), cancellationToken);
+                }
+                finally
+                {
+                    _store.Delete();
+                }
+                return;
+            }
             _store.Delete();
         }
         finally
