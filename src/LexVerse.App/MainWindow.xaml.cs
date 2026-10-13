@@ -370,7 +370,9 @@ public partial class MainWindow : Window
         var handle = new WindowInteropHelper(this).Handle;
         _hwndSource = HwndSource.FromHwnd(handle);
         _hwndSource?.AddHook(WndProc);
-        _ = SetWindowDisplayAffinity(handle, WdaExcludeFromCapture);
+
+        // ẩn cửa sổ khi chụp màn hình 
+        // _ = SetWindowDisplayAffinity(handle, WdaExcludeFromCapture);
         _ = TryApplyPopupHotkey(_desktopPreferences.Current.PopupShortcut);
         StatusText.Text = _hotkeyRegistered
             ? $"Ready. Highlight text in another app and press {_registeredPopupShortcut}."

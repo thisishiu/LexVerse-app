@@ -3,8 +3,7 @@ using LexVerse.Core.Product;
 namespace LexVerse.Application.Product;
 
 /// <summary>
-/// Central execution boundary for product capabilities. UI visibility is only a convenience;
-/// invoking a use case must still pass through this gate.
+/// [Vie] Ranh giới thực thi trung tâm cho các khả năng sản phẩm. Khả năng hiển thị UI chỉ là một tiện ích; việc gọi một use case vẫn phải đi qua cổng này. Kiểm tra quyền trước khi dùng 1 tính năng.
 /// </summary>
 public sealed class FeatureGate(IFeatureAccessService accessService)
 {
