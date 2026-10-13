@@ -14,24 +14,80 @@ declare global {
   }
 }
 
-const initialPreview: DesktopSnapshot = {
+const basePreview: DesktopSnapshot = {
   moduleCount: 2,
-  status: "Preview mode — waiting for the native host.",
+  status: "Preview mode - waiting for the native host.",
   hotkey: "F6 preview",
   quickTranslation: "",
   sourceLanguage: "auto",
   targetLanguage: "vi",
+  settings: {
+    appLanguage: "en",
+    sourceLanguage: "auto",
+    targetLanguage: "vi",
+    ocrMode: "document",
+    ignoredTerms: "HP, MP, EXP",
+    preserveAcronymsAndTechnicalTerms: true,
+    closePopupOnOutsideClick: true,
+    allowPopupDragging: true,
+    showOcrDebugBoxes: false,
+    showPopupBeforeTranslationFinishes: false,
+    scanIntervalMs: 500,
+    overlayOpacityPercent: 85,
+    overlayFontScalePercent: 100,
+    useDarkOverlayBlocks: true,
+    maxOcrFragments: 24,
+    translationInstruction: "Translate naturally and clearly. Keep proper names, technical terms, HP/MP/EXP unchanged. Do not add explanations.",
+    shortcuts: {
+      popup: "F6",
+      region: "Ctrl+Shift+R",
+      fullScreen: "Ctrl+Shift+F",
+      stop: "Escape",
+      reset: "Ctrl+Shift+Backspace"
+    }
+  },
   privacy: { allowRemoteTextProcessing: false, allowLocalDiagnostics: true },
   realtime: {
     status: "stopped",
     canStartRegion: false,
+    canStartFullScreen: false,
     canStop: false,
     performanceBudgetExceeded: false
   },
   commerce: { configured: false, status: "not connected", offers: [] }
 };
 
+function getPreviewSnapshot(): DesktopSnapshot {
+  const mode = new URLSearchParams(window.location.search).get("preview");
+  if (mode !== "ready" && mode !== "signed-in") return basePreview;
+
+  return {
+    ...basePreview,
+    status: "Preview mode - desktop services ready.",
+    hotkey: "F6 registered globally",
+    privacy: { allowRemoteTextProcessing: true, allowLocalDiagnostics: true },
+    realtime: {
+      status: "stopped",
+      canStartRegion: true,
+      canStartFullScreen: true,
+      canStop: false,
+      lastFrameMilliseconds: 84,
+      performanceBudgetExceeded: false
+    },
+    commerce: {
+      configured: true,
+      status: mode === "signed-in" ? "SIGNED IN" : "SIGNED OUT",
+      displayName: mode === "signed-in" ? "Demo User" : undefined,
+      offers: [
+        { id: "pro-monthly", label: "LexVerse Pro - monthly" },
+        { id: "pro-yearly", label: "LexVerse Pro - yearly" }
+      ]
+    }
+  };
+}
+
 export class DesktopBridge {
+  private connected = false;
   private readonly pending = new Map<string, {
     resolve: (value: unknown) => void;
     reject: (reason: Error) => void;
@@ -65,11 +121,16 @@ export class DesktopBridge {
   }
 
   connect() {
-    this.transport?.addEventListener("message", this.onMessage);
+    if (this.connected || !this.transport) return;
+    this.transport.addEventListener("message", this.onMessage);
+    this.connected = true;
   }
 
   dispose() {
-    this.transport?.removeEventListener("message", this.onMessage);
+    if (this.connected) {
+      this.transport?.removeEventListener("message", this.onMessage);
+      this.connected = false;
+    }
     for (const pending of this.pending.values()) {
       window.clearTimeout(pending.timer);
       pending.reject(new Error("bridge-disposed"));
@@ -85,7 +146,7 @@ export class DesktopBridge {
 
   async command<T>(type: CommandType, payload: unknown = {}): Promise<T> {
     if (!this.transport) {
-      if (type === "app.getSnapshot") return initialPreview as T;
+      if (type === "app.getSnapshot") return getPreviewSnapshot() as T;
       throw new Error("native-host-unavailable");
     }
 

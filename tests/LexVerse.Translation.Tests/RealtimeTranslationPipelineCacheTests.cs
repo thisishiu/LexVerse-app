@@ -101,6 +101,27 @@ public sealed class RealtimeTranslationPipelineCacheTests
         Assert.Equal("hello", result.TranslatedBlocks[0].SourceText);
     }
 
+    [Fact]
+    public async Task CaptureRecognizeAndTranslateAsync_WhenOcrDetectsTextAngle_PropagatesOverlayRotation()
+    {
+        var captureSession = new FakeCaptureSession(CreateFrame());
+        var ocrService = new FakeOcrService
+        {
+            TextAngle = 2.75
+        };
+        var pipeline = new RealtimeTranslationPipeline(
+            captureSession,
+            new ExactFrameChangeDetector(),
+            ocrService,
+            new FakeTextTranslator(),
+            new InMemoryTranslationCache(),
+            RealtimeTranslationOptions.Document);
+
+        var result = await pipeline.CaptureRecognizeAndTranslateAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2.75, result.OverlayFrame.RotationAngle);
+    }
+
     private static CapturedFrame CreateFrame()
     {
         var width = 16;
@@ -159,6 +180,8 @@ public sealed class RealtimeTranslationPipelineCacheTests
     {
         public int CallCount { get; private set; }
 
+        public double TextAngle { get; init; }
+
         public Task<OcrResult> RecognizeAsync(CapturedFrame frame, CancellationToken cancellationToken = default)
         {
             CallCount++;
@@ -168,7 +191,7 @@ public sealed class RealtimeTranslationPipelineCacheTests
             var result = new OcrResult(
                 recognizedBlocks,
                 "en-US",
-                0,
+                TextAngle,
                 DateTimeOffset.UtcNow);
 
             return Task.FromResult(result);

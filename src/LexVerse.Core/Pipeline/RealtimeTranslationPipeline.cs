@@ -170,6 +170,7 @@ public sealed class RealtimeTranslationPipeline
         using var emitGate = new SemaphoreSlim(1, 1);
 
         foreach (var (block, index) in batch.Blocks
+                     .Take(Math.Max(1, _options.MaxOcrFragments))
                      .Select((block, index) => (block, index))
                      .Where(item => !string.IsNullOrWhiteSpace(item.block.SourceText)))
         {
@@ -390,7 +391,8 @@ public sealed class RealtimeTranslationPipeline
             items,
             trace,
             ocrResult.Frame.Geometry.Version,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            ocrResult.OcrResult?.TextAngle ?? 0);
     }
 
     private static ScreenRect ClampToSource(ScreenRect rect, ScreenRect source)

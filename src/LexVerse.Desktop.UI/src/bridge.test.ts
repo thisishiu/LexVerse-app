@@ -15,4 +15,34 @@ describe("DesktopBridge", () => {
     await expect(bridge.command("realtime.stop")).rejects.toThrow("native-host-unavailable");
     bridge.dispose();
   });
+
+  it("reconnects its native listener after a StrictMode cleanup", () => {
+    const previousChrome = window.chrome;
+    const transport = {
+      postMessage: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    };
+    Object.defineProperty(window, "chrome", {
+      configurable: true,
+      value: { webview: transport }
+    });
+
+    try {
+      const bridge = new DesktopBridge();
+      expect(transport.addEventListener).toHaveBeenCalledTimes(1);
+
+      bridge.dispose();
+      expect(transport.removeEventListener).toHaveBeenCalledTimes(1);
+
+      bridge.connect();
+      expect(transport.addEventListener).toHaveBeenCalledTimes(2);
+      bridge.dispose();
+    } finally {
+      Object.defineProperty(window, "chrome", {
+        configurable: true,
+        value: previousChrome
+      });
+    }
+  });
 });

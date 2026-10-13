@@ -6,8 +6,17 @@ import type { BridgeCommand, DesktopSnapshot } from "../types";
 const snapshot: DesktopSnapshot = {
   moduleCount: 2, status: "Ready", hotkey: "F6 ready", quickTranslation: "",
   sourceLanguage: "auto", targetLanguage: "vi",
+  settings: {
+    appLanguage: "en", sourceLanguage: "auto", targetLanguage: "vi", ocrMode: "document",
+    ignoredTerms: "HP, MP, EXP", preserveAcronymsAndTechnicalTerms: true,
+    closePopupOnOutsideClick: true, allowPopupDragging: true, showOcrDebugBoxes: false,
+    showPopupBeforeTranslationFinishes: false, scanIntervalMs: 500,
+    overlayOpacityPercent: 85, overlayFontScalePercent: 100, useDarkOverlayBlocks: true,
+    maxOcrFragments: 24, translationInstruction: "Translate naturally.",
+    shortcuts: { popup: "F6", region: "Ctrl+Shift+R", fullScreen: "Ctrl+Shift+F", stop: "Escape", reset: "Ctrl+Shift+Backspace" }
+  },
   privacy: { allowRemoteTextProcessing: false, allowLocalDiagnostics: true },
-  realtime: { status: "stopped", canStartRegion: false, canStop: false, performanceBudgetExceeded: false },
+  realtime: { status: "stopped", canStartRegion: false, canStartFullScreen: false, canStop: false, performanceBudgetExceeded: false },
   commerce: { configured: false, status: "FREE MODE", offers: [] }
 };
 

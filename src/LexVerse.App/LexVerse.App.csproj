@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <DesktopUiRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\LexVerse.Desktop.UI'))</DesktopUiRoot>
     <DesktopUiOutput>$(DesktopUiRoot)\obj\dist</DesktopUiOutput>
   </PropertyGroup>

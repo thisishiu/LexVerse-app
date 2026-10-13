@@ -10,4 +10,8 @@
     <ProjectReference Include="..\LexVerse.Core\LexVerse.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="LexVerse.OCR.Tests" />
+  </ItemGroup>
+
 </Project>

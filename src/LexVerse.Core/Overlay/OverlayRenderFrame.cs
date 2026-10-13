@@ -6,4 +6,5 @@ public sealed record OverlayRenderFrame(
     IReadOnlyList<OverlayTextItem> Items,
     PipelineTrace? Trace,
     long GeometryVersion,
-    DateTimeOffset Timestamp);
+    DateTimeOffset Timestamp,
+    double RotationAngle = 0);

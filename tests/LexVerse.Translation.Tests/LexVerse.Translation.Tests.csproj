@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\LexVerse.Application\LexVerse.Application.csproj" />
     <ProjectReference Include="..\..\src\LexVerse.Core\LexVerse.Core.csproj" />
     <ProjectReference Include="..\..\src\LexVerse.Infrastructure\LexVerse.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\LexVerse.Overlay\LexVerse.Overlay.csproj" />
   </ItemGroup>
 
 </Project>

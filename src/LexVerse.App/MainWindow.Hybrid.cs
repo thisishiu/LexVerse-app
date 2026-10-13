@@ -106,6 +106,7 @@ public partial class MainWindow
         core.Settings.AreDevToolsEnabled = false;
         core.Settings.AreDefaultContextMenusEnabled = false;
         core.Settings.AreBrowserAcceleratorKeysEnabled = false;
+        core.Settings.IsZoomControlEnabled = false;
         core.Settings.IsStatusBarEnabled = false;
         core.NavigationStarting += (_, args) =>
         {
@@ -223,13 +224,26 @@ public partial class MainWindow
                 return null;
             }
 
+            case "translation.triggerSelectedText":
+                await RunSelectedTextPopupAsync();
+                return null;
+
             case "realtime.selectRegion":
             case "realtime.start":
                 await StartRegionRealtimeAsync();
                 return null;
 
+            case "realtime.startFullScreen":
+                await StartFullScreenRealtimeAsync();
+                return null;
+
             case "realtime.stop":
                 await StopRealtimeAsync();
+                return null;
+
+            case "realtime.resetOverlay":
+                await _realtimeOutput.ClearAsync();
+                _status = "Realtime overlay cleared.";
                 return null;
 
             case "privacy.updateConsent":
@@ -242,14 +256,7 @@ public partial class MainWindow
             case "settings.update":
             {
                 var payload = DesktopBridgeProtocol.DeserializePayload<SettingsPayload>(command.Payload);
-                if (payload.SourceLanguage is not null)
-                {
-                    _sourceLanguage = ValidateLanguage(payload.SourceLanguage, allowAuto: true);
-                }
-                if (payload.TargetLanguage is not null)
-                {
-                    _targetLanguage = ValidateLanguage(payload.TargetLanguage, allowAuto: false);
-                }
+                await UpdateDesktopSettingsAsync(payload);
                 return null;
             }
 
@@ -321,6 +328,77 @@ public partial class MainWindow
         _status = "Privacy preferences saved.";
     }
 
+    private async Task UpdateDesktopSettingsAsync(SettingsPayload payload)
+    {
+        var current = _desktopPreferences.Current;
+        var shortcuts = payload.Shortcuts;
+        var updated = (current with
+        {
+            AppLanguage = payload.AppLanguage ?? current.AppLanguage,
+            SourceLanguage = payload.SourceLanguage ?? current.SourceLanguage,
+            TargetLanguage = payload.TargetLanguage ?? current.TargetLanguage,
+            OcrMode = payload.OcrMode ?? current.OcrMode,
+            IgnoredTerms = payload.IgnoredTerms ?? current.IgnoredTerms,
+            PreserveAcronymsAndTechnicalTerms = payload.PreserveAcronymsAndTechnicalTerms
+                ?? current.PreserveAcronymsAndTechnicalTerms,
+            ClosePopupOnOutsideClick = payload.ClosePopupOnOutsideClick
+                ?? current.ClosePopupOnOutsideClick,
+            AllowPopupDragging = payload.AllowPopupDragging ?? current.AllowPopupDragging,
+            ShowOcrDebugBoxes = payload.ShowOcrDebugBoxes ?? current.ShowOcrDebugBoxes,
+            ShowPopupBeforeTranslationFinishes = payload.ShowPopupBeforeTranslationFinishes
+                ?? current.ShowPopupBeforeTranslationFinishes,
+            ScanIntervalMs = payload.ScanIntervalMs ?? current.ScanIntervalMs,
+            OverlayOpacityPercent = payload.OverlayOpacityPercent ?? current.OverlayOpacityPercent,
+            OverlayFontScalePercent = payload.OverlayFontScalePercent ?? current.OverlayFontScalePercent,
+            UseDarkOverlayBlocks = payload.UseDarkOverlayBlocks ?? current.UseDarkOverlayBlocks,
+            MaxOcrFragments = payload.MaxOcrFragments ?? current.MaxOcrFragments,
+            TranslationInstruction = payload.TranslationInstruction ?? current.TranslationInstruction,
+            PopupShortcut = shortcuts?.Popup ?? current.PopupShortcut,
+            RegionShortcut = shortcuts?.Region ?? current.RegionShortcut,
+            FullScreenShortcut = shortcuts?.FullScreen ?? current.FullScreenShortcut,
+            StopShortcut = shortcuts?.Stop ?? current.StopShortcut,
+            ResetShortcut = shortcuts?.Reset ?? current.ResetShortcut
+        }).Normalize();
+
+        if (!AreShortcutsValid(updated))
+        {
+            throw new DesktopBridgePayloadException("invalid-shortcut");
+        }
+
+        var popupShortcutChanged = !string.Equals(
+            current.PopupShortcut,
+            updated.PopupShortcut,
+            StringComparison.OrdinalIgnoreCase);
+        if (popupShortcutChanged && _hwndSource is not null && !TryApplyPopupHotkey(updated.PopupShortcut))
+        {
+            throw new DesktopBridgePayloadException("shortcut-unavailable");
+        }
+
+        try
+        {
+            await _desktopPreferences.UpdateAsync(updated);
+        }
+        catch
+        {
+            if (popupShortcutChanged && _hwndSource is not null)
+            {
+                _ = TryApplyPopupHotkey(current.PopupShortcut);
+            }
+
+            throw;
+        }
+
+        ApplyDesktopPreferences(updated);
+        _status = "Application settings saved.";
+    }
+
+    private static bool AreShortcutsValid(DesktopPreferences preferences) =>
+        TryParseShortcut(preferences.PopupShortcut, out _, out _) &&
+        TryParseShortcut(preferences.RegionShortcut, out _, out _) &&
+        TryParseShortcut(preferences.FullScreenShortcut, out _, out _) &&
+        TryParseShortcut(preferences.StopShortcut, out _, out _) &&
+        TryParseShortcut(preferences.ResetShortcut, out _, out _);
+
     private static string ValidateLanguage(string language, bool allowAuto)
     {
         var normalized = language?.ToLowerInvariant();
@@ -343,6 +421,7 @@ public partial class MainWindow
                     (offer.BillingPeriod is null ? "one-time" : $"every {offer.BillingPeriod.Count} {offer.BillingPeriod.Unit.ToString().ToLowerInvariant()}")
             }).ToArray();
         var realtime = _realtimeModule.Coordinator.State;
+        var preferences = _desktopPreferences.Current;
         return new
         {
             moduleCount = _moduleCount,
@@ -351,6 +430,33 @@ public partial class MainWindow
             quickTranslation = _lastQuickTranslation,
             sourceLanguage = _sourceLanguage,
             targetLanguage = _targetLanguage,
+            settings = new
+            {
+                appLanguage = preferences.AppLanguage,
+                sourceLanguage = preferences.SourceLanguage,
+                targetLanguage = preferences.TargetLanguage,
+                ocrMode = preferences.OcrMode,
+                ignoredTerms = preferences.IgnoredTerms,
+                preserveAcronymsAndTechnicalTerms = preferences.PreserveAcronymsAndTechnicalTerms,
+                closePopupOnOutsideClick = preferences.ClosePopupOnOutsideClick,
+                allowPopupDragging = preferences.AllowPopupDragging,
+                showOcrDebugBoxes = preferences.ShowOcrDebugBoxes,
+                showPopupBeforeTranslationFinishes = preferences.ShowPopupBeforeTranslationFinishes,
+                scanIntervalMs = preferences.ScanIntervalMs,
+                overlayOpacityPercent = preferences.OverlayOpacityPercent,
+                overlayFontScalePercent = preferences.OverlayFontScalePercent,
+                useDarkOverlayBlocks = preferences.UseDarkOverlayBlocks,
+                maxOcrFragments = preferences.MaxOcrFragments,
+                translationInstruction = preferences.TranslationInstruction,
+                shortcuts = new
+                {
+                    popup = preferences.PopupShortcut,
+                    region = preferences.RegionShortcut,
+                    fullScreen = preferences.FullScreenShortcut,
+                    stop = preferences.StopShortcut,
+                    reset = preferences.ResetShortcut
+                }
+            },
             privacy = new
             {
                 allowRemoteTextProcessing = _privacyPreferences.Current.AllowRemoteTextProcessing,
@@ -360,6 +466,7 @@ public partial class MainWindow
             {
                 status = realtime.Status.ToString().ToLowerInvariant(),
                 canStartRegion = CanStartRegion,
+                canStartFullScreen = CanStartFullScreen,
                 canStop = IsRealtimeRunning,
                 lastFrameMilliseconds = _lastFrameMilliseconds,
                 performanceBudgetExceeded = _lastFrameBudgetExceeded
@@ -376,6 +483,7 @@ public partial class MainWindow
                     LexVerse.Application.Commerce.CommerceStatus.Error => "RETRY",
                     _ => "LOADING"
                 },
+
                 displayName = commerce.Account?.DisplayName,
                 offers
             }
@@ -458,8 +566,30 @@ public partial class MainWindow
         bool AllowLocalDiagnostics);
 
     private sealed record SettingsPayload(
+        string? AppLanguage = null,
         string? SourceLanguage = null,
-        string? TargetLanguage = null);
+        string? TargetLanguage = null,
+        string? OcrMode = null,
+        string? IgnoredTerms = null,
+        bool? PreserveAcronymsAndTechnicalTerms = null,
+        bool? ClosePopupOnOutsideClick = null,
+        bool? AllowPopupDragging = null,
+        bool? ShowOcrDebugBoxes = null,
+        bool? ShowPopupBeforeTranslationFinishes = null,
+        int? ScanIntervalMs = null,
+        int? OverlayOpacityPercent = null,
+        int? OverlayFontScalePercent = null,
+        bool? UseDarkOverlayBlocks = null,
+        int? MaxOcrFragments = null,
+        string? TranslationInstruction = null,
+        ShortcutPayload? Shortcuts = null);
+
+    private sealed record ShortcutPayload(
+        string? Popup = null,
+        string? Region = null,
+        string? FullScreen = null,
+        string? Stop = null,
+        string? Reset = null);
 
     private sealed record CheckoutPayload(string OfferId);
 }

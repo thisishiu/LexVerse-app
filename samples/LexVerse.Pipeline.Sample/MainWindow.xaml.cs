@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using LexVerse.Core.Capture;
 using LexVerse.Core.Geometry;
 using LexVerse.Core.Imaging;
@@ -18,6 +19,7 @@ using LexVerse.Infrastructure.Capture;
 using LexVerse.Infrastructure.Translation;
 using LexVerse.Infrastructure.Windows;
 using LexVerse.OCR;
+using LexVerse.Overlay;
 using LexVerse.Overlay.Models;
 using Windows.Graphics.Capture;
 using OverlayWindow = LexVerse.Overlay.MainWindow;
@@ -32,6 +34,8 @@ public partial class MainWindow : Window
     private const string LightBlockForeground = "Black";
     private const string DarkBlockBackground = "Black";
     private const string DarkBlockForeground = "White";
+    private const string DefaultTranslationInstruction =
+        "Translate naturally and clearly. Keep proper names, technical terms, HP/MP/EXP unchanged. Do not add explanations.";
     private const double MinBaseOverlayFontSize = 12;
     private const double MaxBaseOverlayFontSize = 28;
     private const double MinOverlayFontSize = 8;
@@ -49,8 +53,10 @@ public partial class MainWindow : Window
     private const byte VkC = 0x43;
     private const uint KeyEventKeyUp = 0x0002;
     private const uint MonitorDefaultToNearest = 0x00000002;
-    private const double WindowEdgeDragThickness = 18;
-    private const int WmNcLeftButtonDown = 0x00A1;
+    private const int WmNcHitTest = 0x0084;
+    private const double WindowCaptionHeight = 94;
+    private const double WindowResizeBorderThickness = 8;
+    private const double WindowFrameDragThickness = 30;
     private static readonly IntPtr HtCaption = new(0x0002);
     private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> LocalizedText =
         new Dictionary<string, IReadOnlyDictionary<string, string>>
@@ -176,6 +182,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<TextItem> _overlayItems = [];
     private readonly AppUserSettings _userSettings = AppUserSettings.Load();
     private readonly Lazy<ITextTranslator> _popupTranslator = new(() => new GoogleCloudTextTranslator());
+    private readonly WindowsMonitorService _monitorService = new();
     private PopupKeywordExplainer? _popupKeywordExplainer;
     private GraphicsCaptureItem? _captureItem;
     private Func<PixelSize, FrameGeometry>? _captureGeometryProvider;
@@ -203,41 +210,6 @@ public partial class MainWindow : Window
         RefreshShortcutButtons();
         KeyDown += MainWindow_KeyDown;
         UpdateFontSizeControls();
-    }
-
-    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ChangedButton != MouseButton.Left)
-        {
-            return;
-        }
-
-        if (e.ClickCount == 2)
-        {
-            ToggleWindowState();
-            return;
-        }
-
-        BeginWindowDragMove();
-    }
-
-    private void WindowShell_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ChangedButton != MouseButton.Left ||
-            WindowState == WindowState.Maximized ||
-            IsInteractiveElement(e.OriginalSource as DependencyObject))
-        {
-            return;
-        }
-
-        var point = e.GetPosition(this);
-        if (!IsNearWindowDragEdge(point))
-        {
-            return;
-        }
-
-        e.Handled = true;
-        BeginWindowDragMove();
     }
 
     private void MinimizeWindow_Click(object sender, RoutedEventArgs e)
@@ -318,47 +290,6 @@ public partial class MainWindow : Window
             : WindowState.Maximized;
     }
 
-    private void BeginWindowDragMove()
-    {
-        var handle = new WindowInteropHelper(this).Handle;
-        if (handle == IntPtr.Zero)
-        {
-            return;
-        }
-
-        ReleaseCapture();
-        SendMessage(handle, WmNcLeftButtonDown, HtCaption, IntPtr.Zero);
-    }
-
-    private bool IsNearWindowDragEdge(Point point)
-    {
-        return point.X <= WindowEdgeDragThickness
-            || point.Y <= WindowEdgeDragThickness
-            || ActualWidth - point.X <= WindowEdgeDragThickness
-            || ActualHeight - point.Y <= WindowEdgeDragThickness;
-    }
-
-    private static bool IsInteractiveElement(DependencyObject? source)
-    {
-        while (source is not null)
-        {
-            if (source is ButtonBase
-                or ComboBox
-                or TextBoxBase
-                or Slider
-                or ScrollBar
-                or ListBox
-                or ListBoxItem)
-            {
-                return true;
-            }
-
-            source = GetDependencyObjectParent(source);
-        }
-
-        return false;
-    }
-
     private static DependencyObject? GetDependencyObjectParent(DependencyObject source)
     {
         return source is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D
@@ -412,6 +343,13 @@ public partial class MainWindow : Window
 
         try
         {
+            var ocrLanguageTag = GetComboBoxTagOrText(OcrLanguageBox);
+            if (!WindowsOcrService.IsLanguageSupported(ocrLanguageTag))
+            {
+                throw new InvalidOperationException(
+                    $"Windows OCR language pack '{ocrLanguageTag}' is not installed. Install it in Windows language settings, then try again.");
+            }
+
             var sessionItem = CreateSessionCaptureItem();
             _captureSession = WindowsGraphicsCaptureSession.Create(
                 sessionItem.Item,
@@ -1076,14 +1014,15 @@ public partial class MainWindow : Window
         };
         var monitor = MonitorFromPoint(center, MonitorDefaultToNearest);
         var monitorBounds = GetMonitorBounds(monitor);
+        var monitorDpi = _monitorService.GetMonitorDpi(monitor);
 
         _captureItem = GraphicsCaptureItemFactory.CreateForMonitor(monitor);
         _captureGeometryProvider = frameSize => new FrameGeometry(
             frameSize,
             monitorBounds,
             CoordinateSpace.FrameLocal,
-            1,
-            1,
+            monitorDpi.ScaleX,
+            monitorDpi.ScaleY,
             0);
         _captureSourceInfo = new CaptureSourceInfo(
             useRegionMask ? CaptureSourceKind.Region : CaptureSourceKind.Monitor,
@@ -1328,7 +1267,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        _overlayWindow.SetPhysicalBounds(frame.Trace.Geometry.SourceScreenRect);
+        _overlayWindow.SetPhysicalBounds(
+            frame.Trace.Geometry.SourceScreenRect,
+            frame.Trace.Geometry.DpiScaleX,
+            frame.Trace.Geometry.DpiScaleY);
+        _overlayWindow.SetContentRotation(frame.RotationAngle);
         if (!_overlayWindow.IsVisible)
         {
             _overlayWindow.Show();
@@ -1359,6 +1302,7 @@ public partial class MainWindow : Window
                     X = sourceRect.X,
                     Y = sourceRect.Y,
                     Width = Math.Max(24, sourceRect.Width),
+                    Height = Math.Max(12, sourceRect.Height),
                     MinHeight = Math.Max(12, sourceRect.Height),
                     FontSize = 1,
                     Background = "#00FFFFFF",
@@ -1367,14 +1311,26 @@ public partial class MainWindow : Window
                 });
             }
 
+            var layout = OverlayTextLayoutCalculator.Calculate(
+                item.TranslatedText,
+                width,
+                minHeight,
+                maxWidth,
+                CalculateOverlayFontSize(item, _overlayWindow),
+                MinOverlayFontSize,
+                OverlayHorizontalPadding,
+                OverlayVerticalPadding,
+                VisualTreeHelper.GetDpi(_overlayWindow).PixelsPerDip);
+
             _overlayItems.Add(new TextItem
             {
                 Text = item.TranslatedText,
                 X = paddedX,
                 Y = paddedY,
-                Width = Math.Min(width + (OverlayHorizontalPadding * 2), maxWidth),
-                MinHeight = minHeight + (OverlayVerticalPadding * 2),
-                FontSize = CalculateOverlayFontSize(item, _overlayWindow),
+                Width = layout.Width,
+                Height = layout.Height,
+                MinHeight = layout.Height,
+                FontSize = layout.FontSize,
                 Background = blockBackground,
                 BorderBrush = showDebugBoxes ? "#FF0078D4" : "Transparent",
                 Foreground = blockForeground
@@ -1436,6 +1392,7 @@ public partial class MainWindow : Window
 
         return baseOptions with
         {
+            SourceLanguage = GetSelectedSourceLanguageForTranslation() ?? "auto",
             TargetLanguage = GetComboBoxTagOrText(TargetLanguageBox),
             TranslationPrompt = CreateTranslationPromptOptions()
         };
@@ -1443,8 +1400,9 @@ public partial class MainWindow : Window
 
     private TranslationPromptOptions CreateTranslationPromptOptions()
     {
+        var customInstruction = TranslationPromptBox is null ? null : TranslationPromptBox.Text;
         return new TranslationPromptOptions(
-            TranslationPromptBox is null ? null : TranslationPromptBox.Text,
+            string.IsNullOrWhiteSpace(customInstruction) ? DefaultTranslationInstruction : customInstruction,
             ParseIgnoredTerms(IgnoredTermsBox is null ? null : IgnoredTermsBox.Text),
             KeepTermsCheck?.IsChecked == true);
     }
@@ -1495,7 +1453,7 @@ public partial class MainWindow : Window
         var promptOptions = CreateTranslationPromptOptions();
         var labels = new List<string>
         {
-            promptOptions.HasInstruction ? "Custom prompt" : "Default prompt"
+            string.IsNullOrWhiteSpace(TranslationPromptBox?.Text) ? "Default prompt" : "Custom prompt"
         };
 
         if (promptOptions.HasIgnoredTerms)
@@ -1678,6 +1636,16 @@ public partial class MainWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (message == WmNcHitTest && SettingsOverlay.Visibility != Visibility.Visible)
+        {
+            var point = PointFromScreen(UnpackScreenPoint(lParam));
+            if (IsWithinWindowFrameDragBand(point) && !IsInteractiveElementAt(point))
+            {
+                handled = true;
+                return HtCaption;
+            }
+        }
+
         if (message == WmHotkey && wParam.ToInt32() == HotkeyId)
         {
             handled = true;
@@ -1685,6 +1653,59 @@ public partial class MainWindow : Window
         }
 
         return IntPtr.Zero;
+    }
+
+    private bool IsWithinWindowFrameDragBand(Point point)
+    {
+        var rightDistance = ActualWidth - point.X;
+        var bottomDistance = ActualHeight - point.Y;
+        var isInsideWindow = point.X >= 0 && point.Y >= 0 &&
+                             rightDistance >= 0 && bottomDistance >= 0;
+        var isNativeResizeBorder = point.X <= WindowResizeBorderThickness ||
+                                   point.Y <= WindowResizeBorderThickness ||
+                                   rightDistance <= WindowResizeBorderThickness ||
+                                   bottomDistance <= WindowResizeBorderThickness;
+
+        if (!isInsideWindow || isNativeResizeBorder)
+        {
+            return false;
+        }
+
+        var isSideDragBand = point.Y >= WindowCaptionHeight &&
+                             (point.X <= WindowFrameDragThickness ||
+                              rightDistance <= WindowFrameDragThickness);
+        var isBottomDragBand = bottomDistance <= WindowFrameDragThickness;
+        return isSideDragBand || isBottomDragBand;
+    }
+
+    private bool IsInteractiveElementAt(Point point)
+    {
+        var source = InputHitTest(point) as DependencyObject;
+        while (source is not null)
+        {
+            if (source is ButtonBase
+                or ComboBox
+                or TextBoxBase
+                or Slider
+                or ScrollBar
+                or ListBox
+                or ListBoxItem)
+            {
+                return true;
+            }
+
+            source = GetDependencyObjectParent(source);
+        }
+
+        return false;
+    }
+
+    private static Point UnpackScreenPoint(IntPtr packedPoint)
+    {
+        var value = packedPoint.ToInt64();
+        var x = unchecked((short)(value & 0xFFFF));
+        var y = unchecked((short)((value >> 16) & 0xFFFF));
+        return new Point(x, y);
     }
 
     private async void MainWindow_KeyDown(object sender, KeyEventArgs e)
@@ -1711,12 +1732,6 @@ public partial class MainWindow : Window
 
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-
-    [DllImport("user32.dll")]
-    private static extern bool ReleaseCapture();
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll")]
     private static extern uint GetClipboardSequenceNumber();

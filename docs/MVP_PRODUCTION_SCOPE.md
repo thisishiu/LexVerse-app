@@ -63,3 +63,10 @@ Trước public MVP phải chọn và triển khai đường production cho tran
 
 Không được tuyên bố public MVP release-ready cho tới khi mọi tiêu chí ở trên có bằng chứng trên đúng release candidate.
 
+
+
+## Integration update — 2026-10-12
+
+Merged dev into feature/ui-japanese-translation. Preserved Japanese OCR Latin/ruby filters, rotated overlays, DPI mapping, text layout, Comic mode, native UI and sample redesign. Added hybrid React/WebView2 UI and authenticated server translation from dev. Production translation requires LEXVERSE_TRANSLATION_ENDPOINT, account tokens and entitlements; the legacy free-feature list is no longer applied by AppCompositionRoot. Comic availability therefore depends on server entitlements. Local HTTP is restricted to explicitly enabled development loopback. Google translation remains available in samples.
+
+Backups: backup/dev-before-japanese-merge-20261012 and backup/japanese-before-dev-merge-20261012. Remote branch has not been pushed. Verification: solution build passed (12 projects, zero warnings/errors); OCR tests 43 passed; translation tests 105 passed; frontend TypeScript and 2 tests passed. Manual Windows OCR/overlay checks remain necessary.

@@ -14,24 +14,25 @@
     <Border x:Name="PopupShell"
             MinWidth="440"
             MaxWidth="620"
-            Background="#F416191F"
-            BorderBrush="#343A46"
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
             BorderThickness="1"
-            CornerRadius="14">
+            CornerRadius="10"
+            Effect="{StaticResource FlyoutShadowEffect}">
         <StackPanel>
-            <Grid Background="#11141A" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+            <Grid Background="{StaticResource SurfaceRaisedBrush}" MouseLeftButtonDown="Header_MouseLeftButtonDown">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Margin="18,12">
-                    <TextBlock Text="LexVerse" Foreground="#F5F7FA" FontWeight="SemiBold"/>
-                    <TextBlock Text="Popup translation" Foreground="#8F99A8" FontSize="11"/>
+                    <TextBlock Text="LexVerse" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold"/>
+                    <TextBlock Text="Popup translation" Foreground="{StaticResource MutedTextBrush}" FontSize="11"/>
                 </StackPanel>
                 <Button Grid.Column="1"
                         Content="&#xE711;"
                         FontFamily="Segoe MDL2 Assets"
-                        Foreground="#E8ECF2"
+                        Foreground="{StaticResource TextBrush}"
                         Background="Transparent"
                         BorderThickness="0"
                         Width="42"
@@ -40,30 +41,28 @@
             </Grid>
 
             <StackPanel x:Name="LoadingPanel" Margin="20">
-                <TextBlock Text="Translating…" Foreground="#D5DAE2" FontSize="14"/>
-                <TextBlock Text="This usually takes only a moment." Foreground="#8F99A8" FontSize="12" Margin="0,4,0,12"/>
-                <ProgressBar Height="4" IsIndeterminate="True" Foreground="#F2B84B" Background="#252A33" BorderThickness="0"/>
+                <TextBlock Text="Translating…" Foreground="{StaticResource TextBrush}" FontSize="14"/>
+                <TextBlock Text="This usually takes only a moment." Foreground="{StaticResource MutedTextBrush}" FontSize="12" Margin="0,4,0,12"/>
+                <ProgressBar Height="4" IsIndeterminate="True" Foreground="{StaticResource AccentBrush}" Background="#FFE4CC" BorderThickness="0"/>
             </StackPanel>
 
             <StackPanel x:Name="ResultPanel" Visibility="Collapsed" Margin="20,16,20,20">
-                <TextBlock x:Name="SourceLabel" Text="Original" Foreground="#8F99A8" FontSize="11" FontWeight="SemiBold"/>
-                <TextBlock x:Name="SourceTextBlock" Foreground="#D9DEE7" TextWrapping="Wrap" MaxHeight="120" Margin="0,7,0,16"/>
-                <TextBlock x:Name="TargetLabel" Text="Translation" Foreground="#F2B84B" FontSize="11" FontWeight="SemiBold"/>
-                <TextBlock x:Name="TranslatedTextBlock" Foreground="#F7F8FA" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="25" Margin="0,7,0,16"/>
+                <TextBlock x:Name="SourceLabel" Text="Original" Foreground="{StaticResource MutedTextBrush}" FontSize="11" FontWeight="SemiBold"/>
+                <TextBlock x:Name="SourceTextBlock" Foreground="{StaticResource TextBrush}" TextWrapping="Wrap" MaxHeight="120" Margin="0,7,0,16"/>
+                <TextBlock x:Name="TargetLabel" Text="Translation" Foreground="{StaticResource AccentBrush}" FontSize="11" FontWeight="SemiBold"/>
+                <TextBlock x:Name="TranslatedTextBlock" Foreground="{StaticResource TextBrush}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="25" Margin="0,7,0,16"/>
                 <Button x:Name="CopyButton"
                         Content="Copy translation"
                         HorizontalAlignment="Left"
                         Padding="12,7"
-                        Background="#252A33"
-                        Foreground="#F5F7FA"
-                        BorderBrush="#343A46"
+                        Style="{StaticResource SecondaryButton}"
                         Cursor="Hand"
                         Click="Copy_Click"/>
             </StackPanel>
 
             <StackPanel x:Name="ErrorPanel" Visibility="Collapsed" Margin="20,16,20,20">
-                <TextBlock x:Name="ErrorTitle" Foreground="#FFB6B6" FontSize="16" FontWeight="SemiBold"/>
-                <TextBlock x:Name="ErrorMessage" Foreground="#C4CAD4" TextWrapping="Wrap" LineHeight="21" Margin="0,7,0,0"/>
+                <TextBlock x:Name="ErrorTitle" Foreground="{StaticResource DangerBrush}" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock x:Name="ErrorMessage" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" LineHeight="21" Margin="0,7,0,0"/>
             </StackPanel>
         </StackPanel>
     </Border>

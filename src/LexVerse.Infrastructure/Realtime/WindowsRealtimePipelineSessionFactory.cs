@@ -39,6 +39,7 @@ public sealed class WindowsRealtimePipelineSessionFactory : IRealtimePipelineSes
 
         var monitor = _monitorService.GetNearestMonitor(request.TargetScreenRect);
         var monitorBounds = _monitorService.GetMonitorBounds(monitor);
+        var monitorDpi = _monitorService.GetMonitorDpi(monitor);
         var captureItem = GraphicsCaptureItemFactory.CreateForMonitor(monitor);
         var source = new CaptureSourceInfo(
             request.CaptureKind == RealtimeCaptureKind.Region
@@ -54,8 +55,8 @@ public sealed class WindowsRealtimePipelineSessionFactory : IRealtimePipelineSes
                 frameSize,
                 monitorBounds,
                 CoordinateSpace.FrameLocal,
-                1,
-                1,
+                monitorDpi.ScaleX,
+                monitorDpi.ScaleY,
                 0),
             source);
 

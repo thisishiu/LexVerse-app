@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DesktopBridge } from "../bridge";
 import type { DesktopSnapshot } from "../types";
 
@@ -11,6 +11,7 @@ export function useDesktopApp() {
   const [selectedOffer, setSelectedOffer] = useState("");
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
+  const settingsLanguagePair = useRef("");
 
   useEffect(() => {
     let active = true;
@@ -20,6 +21,7 @@ export function useDesktopApp() {
       setSnapshot(next);
       setSourceLanguage(next.sourceLanguage);
       setTargetLanguage(next.targetLanguage);
+      settingsLanguagePair.current = `${next.settings.sourceLanguage}:${next.settings.targetLanguage}`;
       setSelectedOffer(next.commerce.offers[0]?.id ?? "");
     }).catch(() => {
       if (active) setError("The native workspace is unavailable.");
@@ -29,7 +31,15 @@ export function useDesktopApp() {
       if (event.type !== "app.snapshot") return;
       const next = event.payload as DesktopSnapshot;
       setSnapshot(next);
-      setSelectedOffer((current) => current || next.commerce.offers[0]?.id || "");
+      const nextPair = `${next.settings.sourceLanguage}:${next.settings.targetLanguage}`;
+      if (nextPair !== settingsLanguagePair.current) {
+        settingsLanguagePair.current = nextPair;
+        setSourceLanguage(next.settings.sourceLanguage);
+        setTargetLanguage(next.settings.targetLanguage);
+      }
+      setSelectedOffer((current) => next.commerce.offers.some((offer) => offer.id === current)
+        ? current
+        : next.commerce.offers[0]?.id ?? "");
     });
 
     return () => {
