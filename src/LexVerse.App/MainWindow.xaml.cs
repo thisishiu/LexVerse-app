@@ -2,8 +2,10 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using LexVerse.Application.Desktop;
 using LexVerse.Application.Modules;
 using LexVerse.Application.Commerce;
 using LexVerse.Application.Popup;
@@ -14,6 +16,7 @@ using LexVerse.App.Features.Popup;
 using LexVerse.App.Features.Realtime;
 using LexVerse.Core.Pipeline;
 using LexVerse.Core.Product;
+using LexVerse.Core.Translation;
 using LexVerse.Infrastructure.Windows;
 
 namespace LexVerse.App;
@@ -22,7 +25,10 @@ public partial class MainWindow : Window
 {
     private const int HotkeyId = 0x4C56;
     private const int WmHotkey = 0x0312;
-    private const uint VkF6 = 0x75;
+    private const uint ModAlt = 0x0001;
+    private const uint ModControl = 0x0002;
+    private const uint ModShift = 0x0004;
+    private const uint ModWindows = 0x0008;
     private const uint ModNoRepeat = 0x4000;
     private const uint WdaExcludeFromCapture = 0x00000011;
     private readonly PopupFeatureModule _popupModule;
@@ -31,12 +37,15 @@ public partial class MainWindow : Window
     private readonly IFeatureAccessService _featureAccessService;
     private readonly CommerceCoordinator _commerce;
     private readonly IPrivacyPreferencesService _privacyPreferences;
+    private readonly IDesktopPreferencesService _desktopPreferences;
+    private readonly WpfRealtimeOverlayOutput _realtimeOutput;
     private bool _isUpdatingPrivacyUi;
     private bool _regionAccessAllowed;
     private bool _fullScreenAccessAllowed;
     private CancellationTokenSource? _popupCancellation;
     private HwndSource? _hwndSource;
     private bool _hotkeyRegistered;
+    private string _registeredPopupShortcut = "F6";
     private bool _isSelectingRegion;
     private bool _cleanupStarted;
     private bool _cleanupComplete;
@@ -48,7 +57,9 @@ public partial class MainWindow : Window
         WindowsMonitorService monitorService,
         IFeatureAccessService featureAccessService,
         CommerceCoordinator commerce,
-        IPrivacyPreferencesService privacyPreferences)
+        IPrivacyPreferencesService privacyPreferences,
+        IDesktopPreferencesService desktopPreferences,
+        WpfRealtimeOverlayOutput realtimeOutput)
     {
         ArgumentNullException.ThrowIfNull(popupModule);
         ArgumentNullException.ThrowIfNull(realtimeModule);
@@ -57,6 +68,8 @@ public partial class MainWindow : Window
         ArgumentNullException.ThrowIfNull(featureAccessService);
         ArgumentNullException.ThrowIfNull(commerce);
         ArgumentNullException.ThrowIfNull(privacyPreferences);
+        ArgumentNullException.ThrowIfNull(desktopPreferences);
+        ArgumentNullException.ThrowIfNull(realtimeOutput);
 
         _popupModule = popupModule;
         _realtimeModule = realtimeModule;
@@ -64,14 +77,18 @@ public partial class MainWindow : Window
         _featureAccessService = featureAccessService;
         _commerce = commerce;
         _privacyPreferences = privacyPreferences;
+        _desktopPreferences = desktopPreferences;
+        _realtimeOutput = realtimeOutput;
         InitializeComponent();
         InitializeHybridUiHost();
         ApplyPrivacyPreferences(_privacyPreferences.Current);
+        ApplyDesktopPreferences(_desktopPreferences.Current);
         ModuleCountText.Text = $"{modules.Modules.Count} module registered by the composition root";
         _realtimeModule.Coordinator.StateChanged += RealtimeCoordinator_StateChanged;
         _realtimeModule.Coordinator.FrameProcessed += RealtimeCoordinator_FrameProcessed;
         _commerce.StateChanged += Commerce_StateChanged;
         _privacyPreferences.Changed += PrivacyPreferences_Changed;
+        _desktopPreferences.Changed += DesktopPreferences_Changed;
         Loaded += MainWindow_Loaded;
     }
 
@@ -97,6 +114,41 @@ public partial class MainWindow : Window
             ApplyPrivacyPreferences(preferences);
             await RefreshFeatureAccessAsync();
         });
+
+    private void DesktopPreferences_Changed(object? sender, DesktopPreferences preferences) =>
+        Dispatcher.BeginInvoke(() =>
+        {
+            ApplyDesktopPreferences(preferences);
+            if (_hwndSource is not null &&
+                !string.Equals(_registeredPopupShortcut, preferences.PopupShortcut, StringComparison.OrdinalIgnoreCase))
+            {
+                _ = TryApplyPopupHotkey(preferences.PopupShortcut);
+            }
+
+            PublishDesktopSnapshot();
+        });
+
+    private void ApplyDesktopPreferences(DesktopPreferences preferences)
+    {
+        SelectLanguage(SourceLanguageBox, preferences.SourceLanguage, allowAuto: true);
+        SelectLanguage(TargetLanguageBox, preferences.TargetLanguage, allowAuto: false);
+
+        var mode = ModeBox.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(item => string.Equals(
+                item.Tag?.ToString(),
+                preferences.OcrMode,
+                StringComparison.OrdinalIgnoreCase));
+        if (mode is not null)
+        {
+            ModeBox.SelectedItem = mode;
+        }
+
+        PopupShortcutHintText.Text =
+            $"Highlight text in any application and press {preferences.PopupShortcut}. LexVerse translates it without leaving your current task.";
+        MinimizeForHotkeyButton.Content = $"Minimize - use {preferences.PopupShortcut}";
+
+    }
 
     private void ApplyPrivacyPreferences(PrivacyPreferences preferences)
     {
@@ -319,11 +371,108 @@ public partial class MainWindow : Window
         _hwndSource = HwndSource.FromHwnd(handle);
         _hwndSource?.AddHook(WndProc);
         _ = SetWindowDisplayAffinity(handle, WdaExcludeFromCapture);
-        _hotkeyRegistered = RegisterHotKey(handle, HotkeyId, ModNoRepeat, VkF6);
-        HotkeyStatusText.Text = _hotkeyRegistered ? "F6 ready" : "F6 unavailable";
+        _ = TryApplyPopupHotkey(_desktopPreferences.Current.PopupShortcut);
         StatusText.Text = _hotkeyRegistered
-            ? "Ready. Highlight text in another app and press F6."
-            : "F6 is used by another app. Quick text remains available.";
+            ? $"Ready. Highlight text in another app and press {_registeredPopupShortcut}."
+            : $"{_desktopPreferences.Current.PopupShortcut} is used by another app. Quick text remains available.";
+    }
+
+    private bool TryApplyPopupHotkey(string shortcut)
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero || !TryParseShortcut(shortcut, out var modifiers, out var virtualKey))
+        {
+            HotkeyStatusText.Text = $"{shortcut} unavailable";
+            return false;
+        }
+
+        var previousShortcut = _registeredPopupShortcut;
+        var previousWasRegistered = _hotkeyRegistered;
+        if (_hotkeyRegistered)
+        {
+            UnregisterHotKey(handle, HotkeyId);
+            _hotkeyRegistered = false;
+        }
+
+        if (RegisterHotKey(handle, HotkeyId, modifiers | ModNoRepeat, virtualKey))
+        {
+            _registeredPopupShortcut = shortcut;
+            _hotkeyRegistered = true;
+            HotkeyStatusText.Text = $"{shortcut} ready";
+            return true;
+        }
+
+        if (previousWasRegistered &&
+            TryParseShortcut(previousShortcut, out var previousModifiers, out var previousVirtualKey))
+        {
+            _hotkeyRegistered = RegisterHotKey(
+                handle,
+                HotkeyId,
+                previousModifiers | ModNoRepeat,
+                previousVirtualKey);
+        }
+
+        HotkeyStatusText.Text = $"{shortcut} unavailable";
+        return false;
+    }
+
+    private static bool TryParseShortcut(
+        string? shortcut,
+        out uint modifiers,
+        out uint virtualKey)
+    {
+        modifiers = 0;
+        virtualKey = 0;
+        var parts = shortcut?
+            .Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts is null or { Length: 0 })
+        {
+            return false;
+        }
+
+        for (var index = 0; index < parts.Length - 1; index++)
+        {
+            switch (parts[index].ToLowerInvariant())
+            {
+                case "ctrl":
+                case "control":
+                    modifiers |= ModControl;
+                    break;
+                case "alt":
+                    modifiers |= ModAlt;
+                    break;
+                case "shift":
+                    modifiers |= ModShift;
+                    break;
+                case "win":
+                case "windows":
+                    modifiers |= ModWindows;
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        var keyText = parts[^1] switch
+        {
+            var value when value.Equals("Esc", StringComparison.OrdinalIgnoreCase) => "Escape",
+            var value when value.Equals("Enter", StringComparison.OrdinalIgnoreCase) => "Return",
+            var value when value.Equals("Backspace", StringComparison.OrdinalIgnoreCase) => "Back",
+            _ => parts[^1]
+        };
+        if (!Enum.TryParse<Key>(keyText, ignoreCase: true, out var key) || key == Key.None)
+        {
+            return false;
+        }
+
+        var nativeKey = KeyInterop.VirtualKeyFromKey(key);
+        if (nativeKey <= 0)
+        {
+            return false;
+        }
+
+        virtualKey = (uint)nativeKey;
+        return true;
     }
 
     private async void TranslateQuickText_Click(object sender, RoutedEventArgs e) =>
@@ -348,7 +497,7 @@ public partial class MainWindow : Window
     private void MinimizeForHotkey_Click(object sender, RoutedEventArgs e)
     {
         WindowState = WindowState.Minimized;
-        StatusText.Text = "Highlight text in another app and press F6.";
+        StatusText.Text = $"Highlight text in another app and press {_desktopPreferences.Current.PopupShortcut}.";
     }
 
     private async void StartRegionRealtime_Click(object sender, RoutedEventArgs e) =>
@@ -438,9 +587,13 @@ public partial class MainWindow : Window
 
     private RealtimeTranslationOptions CreateRealtimeOptions()
     {
+        var preferences = _desktopPreferences.Current;
         var sourceLanguage = GetSelectedTag(SourceLanguageBox);
         var baseOptions = GetSelectedProcessingModeTag() switch
         {
+            "subtitle" => RealtimeTranslationOptions.Subtitle,
+            "game-dialogue" => RealtimeTranslationOptions.GameDialogue,
+            "fullscreen" => RealtimeTranslationOptions.FullScreen,
             "comic" => RealtimeTranslationOptions.Comic,
             _ => RealtimeTranslationOptions.Document
         };
@@ -448,7 +601,10 @@ public partial class MainWindow : Window
         return baseOptions with
         {
             SourceLanguage = sourceLanguage,
-            TargetLanguage = GetSelectedTag(TargetLanguageBox)
+            TargetLanguage = GetSelectedTag(TargetLanguageBox),
+            OcrInterval = TimeSpan.FromMilliseconds(preferences.ScanIntervalMs),
+            MaxOcrFragments = preferences.MaxOcrFragments,
+            TranslationPrompt = CreatePromptOptions(preferences)
         };
     }
 
@@ -458,9 +614,14 @@ public partial class MainWindow : Window
             : "document";
 
     private string GetSelectedProcessingModeLabel() =>
-        GetSelectedProcessingModeTag().Equals("comic", StringComparison.OrdinalIgnoreCase)
-            ? "Comic"
-            : "Document";
+        GetSelectedProcessingModeTag() switch
+        {
+            "subtitle" => "Subtitle",
+            "game-dialogue" => "Game dialogue",
+            "fullscreen" => "Full screen",
+            "comic" => "Comic",
+            _ => "Document"
+        };
 
     private string GetOcrLanguageTag() => GetSelectedTag(SourceLanguageBox) switch
     {
@@ -532,7 +693,10 @@ public partial class MainWindow : Window
         var cancellation = new CancellationTokenSource();
         _popupCancellation = cancellation;
         var cancellationToken = cancellation.Token;
-        var popup = new TranslationPopupWindow();
+        var preferences = _desktopPreferences.Current;
+        var popup = new TranslationPopupWindow(
+            preferences.ClosePopupOnOutsideClick,
+            preferences.AllowPopupDragging);
 
         StatusText.Text = loadingStatus;
         QuickTranslateButton.IsEnabled = false;
@@ -540,8 +704,7 @@ public partial class MainWindow : Window
         try
         {
             var operationTask = operation(cancellationToken);
-            var loadingDelay = Task.Delay(TimeSpan.FromMilliseconds(260), cancellationToken);
-            if (await Task.WhenAny(operationTask, loadingDelay) != operationTask)
+            if (preferences.ShowPopupBeforeTranslationFinishes)
             {
                 popup.Show();
             }
@@ -550,7 +713,7 @@ public partial class MainWindow : Window
             if (!result.HasSelection || result.Translation is null || result.SourceText is null)
             {
                 popup.Close();
-                StatusText.Text = "No highlighted text found. Select text and try F6 again.";
+                StatusText.Text = $"No highlighted text found. Select text and try {_desktopPreferences.Current.PopupShortcut} again.";
                 return;
             }
 
@@ -606,13 +769,23 @@ public partial class MainWindow : Window
 
     private PopupTranslationRequest CreateRequest()
     {
+        var preferences = _desktopPreferences.Current;
         var sourceLanguage = GetSelectedTag(SourceLanguageBox);
         return new PopupTranslationRequest(
             GetSelectedTag(TargetLanguageBox),
             sourceLanguage.Equals("auto", StringComparison.OrdinalIgnoreCase)
                 ? null
-                : sourceLanguage);
+                : sourceLanguage,
+            CreatePromptOptions(preferences));
     }
+
+    private static TranslationPromptOptions CreatePromptOptions(DesktopPreferences preferences) =>
+        new(
+            preferences.TranslationInstruction,
+            preferences.IgnoredTerms.Split(
+                [',', ';', '\r', '\n'],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            preferences.PreserveAcronymsAndTechnicalTerms);
 
     private string GetTargetLanguageLabel() =>
         TargetLanguageBox.SelectedItem is ComboBoxItem { Content: { } content }
@@ -687,6 +860,7 @@ public partial class MainWindow : Window
         _realtimeModule.Coordinator.FrameProcessed -= RealtimeCoordinator_FrameProcessed;
         _commerce.StateChanged -= Commerce_StateChanged;
         _privacyPreferences.Changed -= PrivacyPreferences_Changed;
+        _desktopPreferences.Changed -= DesktopPreferences_Changed;
         base.OnClosed(e);
     }
 

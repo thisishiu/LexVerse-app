@@ -1,6 +1,6 @@
 import type { DesktopApp } from "./useDesktopApp";
 
-export type AppRoute = "workspace" | "settings";
+export type AppRoute = "workspace" | "account" | "settings";
 
 export interface RouteProps {
   app: DesktopApp;

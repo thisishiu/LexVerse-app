@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows.Media;
 using System.Windows.Threading;
+using LexVerse.Application.Desktop;
 using LexVerse.Application.Realtime;
 using LexVerse.Core.Overlay;
 using LexVerse.Overlay;
@@ -9,7 +10,7 @@ using OverlayWindow = LexVerse.Overlay.MainWindow;
 
 namespace LexVerse.App.Features.Realtime;
 
-public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput
+public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
 {
     private const double HorizontalPadding = 4;
     private const double VerticalPadding = 2;
@@ -17,11 +18,18 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput
     private const double MaxFontSize = 44;
     private readonly ObservableCollection<TextItem> _items = [];
     private readonly Dispatcher _dispatcher;
+    private readonly IDesktopPreferencesService _preferences;
     private OverlayWindow? _window;
+    private OverlayRenderFrame? _lastFrame;
+    private bool _disposed;
 
-    public WpfRealtimeOverlayOutput(Dispatcher dispatcher)
+    public WpfRealtimeOverlayOutput(
+        Dispatcher dispatcher,
+        IDesktopPreferencesService preferences)
     {
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+        _preferences.Changed += Preferences_Changed;
     }
 
     public Task RenderAsync(
@@ -38,6 +46,7 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput
 
     private void RenderOnUi(OverlayRenderFrame frame)
     {
+        _lastFrame = frame;
         if (frame.Trace is null)
         {
             _window?.Hide();
@@ -50,12 +59,18 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput
             frame.Trace.Geometry.DpiScaleX,
             frame.Trace.Geometry.DpiScaleY);
         _window.SetContentRotation(frame.RotationAngle);
+        _window.Opacity = _preferences.Current.OverlayOpacityPercent / 100d;
         if (!_window.IsVisible)
         {
             _window.Show();
         }
 
-        var nextItems = frame.Items.Select(CreateTextItem).ToArray();
+        var nextItems = frame.Items.Select(CreateTextItem).ToList();
+        if (_preferences.Current.ShowOcrDebugBoxes)
+        {
+            nextItems.AddRange(frame.Items.Select(CreateDebugItem));
+        }
+
         ReconcileItems(nextItems);
     }
 
@@ -68,17 +83,19 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput
         var maxWidth = Math.Max(24, window.ActualWidth - x);
         var fontRect = window.ScreenPhysicalToLocalDip(
             new(0, 0, 1, Math.Max(1, item.FontSize)));
+        var fontScale = _preferences.Current.OverlayFontScalePercent / 100d;
         var layout = OverlayTextLayoutCalculator.Calculate(
             item.TranslatedText,
             targetRect.Width,
             targetRect.Height,
             maxWidth,
-            Math.Clamp(fontRect.Height, MinFontSize, MaxFontSize),
+            Math.Clamp(fontRect.Height * fontScale, MinFontSize, MaxFontSize),
             MinFontSize,
             HorizontalPadding,
             VerticalPadding,
             VisualTreeHelper.GetDpi(window).PixelsPerDip);
 
+        var useDarkBlocks = _preferences.Current.UseDarkOverlayBlocks;
         return new TextItem
         {
             Text = item.TranslatedText,
@@ -88,9 +105,28 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput
             Height = layout.Height,
             MinHeight = layout.Height,
             FontSize = layout.FontSize,
-            Background = "Black",
-            BorderBrush = "Transparent",
-            Foreground = "White"
+            Background = useDarkBlocks ? "#F018181B" : "#F5FFFFFF",
+            BorderBrush = useDarkBlocks ? "#4DFFFFFF" : "#29000000",
+            Foreground = useDarkBlocks ? "White" : "#111827"
+        };
+    }
+
+    private TextItem CreateDebugItem(OverlayTextItem item)
+    {
+        var window = _window ?? throw new InvalidOperationException("Overlay window is not initialized.");
+        var rect = window.ScreenPhysicalToLocalDip(item.TargetRect);
+        return new TextItem
+        {
+            Text = string.Empty,
+            X = Math.Max(0, rect.X),
+            Y = Math.Max(0, rect.Y),
+            Width = Math.Max(2, rect.Width),
+            Height = Math.Max(2, rect.Height),
+            MinHeight = Math.Max(2, rect.Height),
+            FontSize = MinFontSize,
+            Background = "Transparent",
+            BorderBrush = "#FF7A00",
+            Foreground = "Transparent"
         };
     }
 
@@ -129,6 +165,7 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput
 
     private void ClearOnUi()
     {
+        _lastFrame = null;
         _window?.Close();
         _window = null;
         _items.Clear();
@@ -147,5 +184,42 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput
             action,
             DispatcherPriority.Render,
             cancellationToken).Task;
+    }
+
+    private void Preferences_Changed(object? sender, DesktopPreferences preferences)
+    {
+        if (_disposed || _lastFrame is null)
+        {
+            return;
+        }
+
+        _ = _dispatcher.BeginInvoke(
+            () =>
+            {
+                if (!_disposed && _lastFrame is { } frame)
+                {
+                    RenderOnUi(frame);
+                }
+            },
+            DispatcherPriority.Render);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _preferences.Changed -= Preferences_Changed;
+        if (_dispatcher.CheckAccess())
+        {
+            ClearOnUi();
+        }
+        else if (!_dispatcher.HasShutdownStarted)
+        {
+            _dispatcher.Invoke(ClearOnUi);
+        }
     }
 }

@@ -3,6 +3,7 @@ using System.Net.Http;
 using LexVerse.Application.Account;
 using LexVerse.Application.Commerce;
 using LexVerse.Application.Diagnostics;
+using LexVerse.Application.Desktop;
 using LexVerse.Application.Modules;
 using LexVerse.Application.Popup;
 using LexVerse.Application.Product;
@@ -19,6 +20,7 @@ using LexVerse.Infrastructure.Product;
 using LexVerse.Infrastructure.Privacy;
 using LexVerse.Infrastructure.Windows;
 using LexVerse.Infrastructure.Configuration;
+using LexVerse.Infrastructure.Desktop;
 
 namespace LexVerse.App;
 
@@ -31,11 +33,15 @@ public sealed class AppCompositionRoot : IDisposable
     private readonly IFeatureAccessService _accessService;
     private readonly IPrivacyPreferencesService _privacyPreferences;
     private readonly IDisposable? _ownedPrivacyPreferences;
+    private readonly IDesktopPreferencesService _desktopPreferences;
+    private readonly IDisposable? _ownedDesktopPreferences;
+    private readonly WpfRealtimeOverlayOutput _realtimeOutput;
     private bool _disposed;
 
     public AppCompositionRoot(
         IOperationalTelemetry? telemetry = null,
-        IPrivacyPreferencesService? privacyPreferences = null)
+        IPrivacyPreferencesService? privacyPreferences = null,
+        IDesktopPreferencesService? desktopPreferences = null)
     {
         BackendEndpointPolicy.LoadEnvironment();
         telemetry ??= NullOperationalTelemetry.Instance;
@@ -47,6 +53,14 @@ public sealed class AppCompositionRoot : IDisposable
         }
 
         _privacyPreferences = privacyPreferences;
+        if (desktopPreferences is null)
+        {
+            var persistent = new PersistentDesktopPreferencesService();
+            desktopPreferences = persistent;
+            _ownedDesktopPreferences = persistent;
+        }
+
+        _desktopPreferences = desktopPreferences;
         _backendHttpClient = new HttpClient();
         var launcher = new WindowsExternalUriLauncher();
         _accountProvider = CreateAccountProvider(_backendHttpClient, launcher);
@@ -66,7 +80,9 @@ public sealed class AppCompositionRoot : IDisposable
             selectedTextReader,
             translator,
             telemetry));
-        var realtimeOutput = new WpfRealtimeOverlayOutput(System.Windows.Application.Current.Dispatcher);
+        _realtimeOutput = new WpfRealtimeOverlayOutput(
+            System.Windows.Application.Current.Dispatcher,
+            _desktopPreferences);
         var realtimeFactory = new WindowsRealtimePipelineSessionFactory(
             translator,
             monitorService: MonitorService,
@@ -80,7 +96,7 @@ public sealed class AppCompositionRoot : IDisposable
         RealtimeModule = new RealtimeFeatureModule(new RealtimeTranslationCoordinator(
             featureGate,
             realtimeFactory,
-            realtimeOutput,
+            _realtimeOutput,
             telemetry));
         Modules = new FeatureModuleRegistry([PopupModule, RealtimeModule]);
         Commerce = new CommerceCoordinator(
@@ -111,7 +127,9 @@ public sealed class AppCompositionRoot : IDisposable
             MonitorService,
             _accessService,
             Commerce,
-            _privacyPreferences);
+            _privacyPreferences,
+            _desktopPreferences,
+            _realtimeOutput);
     }
 
     public void Dispose()
@@ -123,12 +141,14 @@ public sealed class AppCompositionRoot : IDisposable
 
         _disposed = true;
         RealtimeModule.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _realtimeOutput.Dispose();
         Commerce.Dispose();
         _featureAccessService.Dispose();
         _entitlementCache?.Dispose();
         (_accountProvider as IDisposable)?.Dispose();
         _backendHttpClient.Dispose();
         _ownedPrivacyPreferences?.Dispose();
+        _ownedDesktopPreferences?.Dispose();
     }
 
     private static IEntitlementProvider CreatePaidEntitlementProvider(

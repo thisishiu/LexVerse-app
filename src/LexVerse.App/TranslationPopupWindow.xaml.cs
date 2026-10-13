@@ -3,15 +3,31 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Animation;
 using System.Windows.Interop;
+using System.Windows.Threading;
 
 namespace LexVerse.App;
 
 public partial class TranslationPopupWindow : Window
 {
+    private const int VkLeftButton = 0x01;
     private const uint WdaExcludeFromCapture = 0x00000011;
-    public TranslationPopupWindow()
+    private readonly bool _closeOnOutsideClick;
+    private readonly bool _allowDragging;
+    private readonly DispatcherTimer _outsideClickTimer;
+    private bool _wasLeftButtonPressed;
+
+    public TranslationPopupWindow(
+        bool closeOnOutsideClick = true,
+        bool allowDragging = true)
     {
         InitializeComponent();
+        _closeOnOutsideClick = closeOnOutsideClick;
+        _allowDragging = allowDragging;
+        _outsideClickTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(80)
+        };
+        _outsideClickTimer.Tick += OutsideClickTimer_Tick;
         PositionNearCursor();
     }
 
@@ -53,7 +69,7 @@ public partial class TranslationPopupWindow : Window
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton == MouseButton.Left)
+        if (_allowDragging && e.ChangedButton == MouseButton.Left)
         {
             DragMove();
         }
@@ -62,7 +78,45 @@ public partial class TranslationPopupWindow : Window
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         RepositionInsideVirtualScreen();
+        if (_closeOnOutsideClick)
+        {
+            _outsideClickTimer.Start();
+        }
+
         BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)));
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _outsideClickTimer.Stop();
+        _outsideClickTimer.Tick -= OutsideClickTimer_Tick;
+        base.OnClosed(e);
+    }
+
+    private void OutsideClickTimer_Tick(object? sender, EventArgs e)
+    {
+        var isPressed = (GetAsyncKeyState(VkLeftButton) & 0x8000) != 0;
+        if (!isPressed)
+        {
+            _wasLeftButtonPressed = false;
+            return;
+        }
+
+        if (_wasLeftButtonPressed)
+        {
+            return;
+        }
+
+        _wasLeftButtonPressed = true;
+        if (GetCursorPos(out var point))
+        {
+            var localPoint = PointFromScreen(new Point(point.X, point.Y));
+            if (localPoint.X < 0 || localPoint.Y < 0 ||
+                localPoint.X > ActualWidth || localPoint.Y > ActualHeight)
+            {
+                Close();
+            }
+        }
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -103,6 +157,9 @@ public partial class TranslationPopupWindow : Window
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out NativePoint point);
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int virtualKey);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowDisplayAffinity(IntPtr window, uint affinity);

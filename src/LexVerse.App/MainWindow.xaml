@@ -12,6 +12,8 @@
         MinHeight="580"
         WindowStartupLocation="CenterScreen"
         AutomationProperties.Name="LexVerse Control Center"
+        SnapsToDevicePixels="True"
+        UseLayoutRounding="True"
         Background="{StaticResource BackgroundBrush}">
     <Grid>
         <Grid.RowDefinitions>
@@ -69,7 +71,8 @@
                            Foreground="{StaticResource TextBrush}"
                            FontSize="28"
                            FontWeight="SemiBold"/>
-                <TextBlock Text="Highlight text in any application and press F6. LexVerse translates it without leaving your current task."
+                <TextBlock x:Name="PopupShortcutHintText"
+                           Text="Highlight text in any application and press F6. LexVerse translates it without leaving your current task."
                            Foreground="{StaticResource MutedTextBrush}"
                            TextWrapping="Wrap"
                            LineHeight="21"
@@ -137,7 +140,8 @@
                                     Content="_Translate quick text"
                                     AutomationProperties.HelpText="Translate the text entered above."
                                     Click="TranslateQuickText_Click"/>
-                            <Button Grid.Column="2"
+                            <Button x:Name="MinimizeForHotkeyButton"
+                                    Grid.Column="2"
                                     Style="{StaticResource SecondaryButton}"
                                     Content="Minimize — use F6"
                                     Click="MinimizeForHotkey_Click"/>
@@ -197,6 +201,9 @@
                                   SelectionChanged="ModeBox_SelectionChanged"
                                   AutomationProperties.Name="OCR processing mode"
                                   Margin="0,10,0,0">
+                            <ComboBoxItem Content="Full screen" Tag="fullscreen"/>
+                            <ComboBoxItem Content="Subtitle" Tag="subtitle"/>
+                            <ComboBoxItem Content="Game dialogue" Tag="game-dialogue"/>
                             <ComboBoxItem Content="Document" Tag="document"/>
                             <ComboBoxItem Content="Comic / manga" Tag="comic"/>
                         </ComboBox>
@@ -330,6 +337,10 @@
 
         <wv2:WebView2 x:Name="WebUi"
                       Grid.RowSpan="3"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      SnapsToDevicePixels="True"
+                      ZoomFactor="1"
                       Visibility="Hidden"
                       AutomationProperties.Name="LexVerse web control center" />
     </Grid>

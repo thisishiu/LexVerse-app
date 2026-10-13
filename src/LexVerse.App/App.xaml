@@ -32,6 +32,8 @@
         <Style TargetType="Window">
             <Setter Property="FontFamily" Value="{StaticResource AppFont}"/>
             <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="UseLayoutRounding" Value="True"/>
         </Style>
 

@@ -171,3 +171,28 @@ Kết quả đã chạy lại trên working tree hiện tại:
 Merged dev into feature/ui-japanese-translation. Preserved Japanese OCR Latin/ruby filters, rotated overlays, DPI mapping, text layout, Comic mode, native UI and sample redesign. Added hybrid React/WebView2 UI and authenticated server translation from dev. Production translation requires LEXVERSE_TRANSLATION_ENDPOINT, account tokens and entitlements; the legacy free-feature list is no longer applied by AppCompositionRoot. Comic availability therefore depends on server entitlements. Local HTTP is restricted to explicitly enabled development loopback. Google translation remains available in samples.
 
 Backups: backup/dev-before-japanese-merge-20261012 and backup/japanese-before-dev-merge-20261012. Remote branch has not been pushed. Verification: solution build passed (12 projects, zero warnings/errors); OCR tests 43 passed; translation tests 105 passed; frontend TypeScript and 2 tests passed. Manual Windows OCR/overlay checks remain necessary.
+
+## UI redesign update - 2026-10-12
+
+Nhánh `feature/ui-japanese-translation` đã được fast-forward tới `fc4b17f` trước khi làm lại `src/LexVerse.Desktop.UI`. Diagram nguồn trên diagrams.net (page `m7TsgaFc5hTRnL7zU8nb`) được dùng như sơ đồ nghiệp vụ cho đăng nhập, refresh session, checkout, webhook và entitlement; UI không tạo form email/password giả vì bridge hiện chỉ hỗ trợ đăng nhập PKCE qua trình duyệt bảo mật.
+
+Frontend hiện có ba route hash độc lập:
+
+- `#/workspace`: quick text, lựa chọn ngôn ngữ, live region, trạng thái OCR/performance và F6 popup.
+- `#/account`: signed-in/signed-out, offer từ catalog, checkout, sign-out và restore/sync entitlement.
+- `#/settings`: consent xử lý text bên ngoài, local diagnostics, ngôn ngữ mặc định và help/source.
+
+Thiết kế mới dùng control-center sáng, sidebar responsive, panel bán kính tối đa 8 px và icon `lucide-react`; đã loại bỏ icon mojibake cùng theme editorial tối trước đó. React vẫn chỉ gửi intent và render snapshot. Allow-list, payload và ownership của WPF/WebView2 bridge không đổi. Query `?preview=ready` và `?preview=signed-in` chỉ tạo snapshot demo khi không có native WebView transport, phục vụ kiểm thử UI tĩnh; khi chạy trong app, snapshot native luôn là nguồn sự thật.
+
+`DesktopBridge.connect()` cho phép đăng ký lại native message listener sau cleanup của React StrictMode; promise bị hủy sau cleanup không còn ghi lỗi vào component đã unmount.
+
+Xác minh trên working tree này:
+
+- `npm run check`: pass, TypeScript và Vitest 2 file / 5 test.
+- `npm run build`: pass; production bundle gồm CSS riêng và JS React/WebView.
+- `npm audit`: 0 vulnerability sau khi cập nhật transitive dev dependency `source-map-js` lên 1.2.2.
+- `dotnet build src/LexVerse.App/LexVerse.App.csproj -c Release --no-restore`: pass, 0 warning / 0 error; frontend được build và đóng gói trong host.
+- `dotnet test tests/LexVerse.OCR.Tests/LexVerse.OCR.Tests.csproj -c Release --no-build --no-restore`: pass 43/43.
+- Full `dotnet build LexVerse.slnx -c Release` build được app nhưng dừng tại `LexVerse.Translation.Tests`: thiếu sibling fixture `..\lexverse-server\test\fixtures\node-entitlement.json`. Không tạo entitlement fixture giả trong desktop repo.
+- `git diff --check`: pass; quét mojibake trong `src/LexVerse.Desktop.UI/src`: sạch.
+- Visual QA production bundle: pass ở Workspace 1440x900, Account signed-in 1440x900, Settings 1100x760 và Workspace sidebar thu gọn 800x700; không thấy overlap, tràn chữ hoặc icon lỗi.

@@ -1,38 +1,444 @@
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import {
+  CircleHelp,
+  Gauge,
+  Keyboard,
+  Languages,
+  MonitorCog,
+  RotateCcw,
+  Save,
+  ScanText,
+  ShieldCheck,
+  SlidersHorizontal
+} from "lucide-react";
 import type { RouteProps } from "../../app/route-types";
+import type { DesktopSettings, DesktopShortcuts } from "../../types";
+import { languages } from "../workspace/WorkspaceScreen";
+
+type SettingsTab = "general" | "translation" | "realtime" | "shortcuts";
+type ShortcutName = keyof DesktopShortcuts;
+
+const defaultShortcuts: DesktopShortcuts = {
+  popup: "F6",
+  region: "Ctrl+Shift+R",
+  fullScreen: "Ctrl+Shift+F",
+  stop: "Escape",
+  reset: "Ctrl+Shift+Backspace"
+};
+
+const tabs = [
+  ["general", SlidersHorizontal, "General", "Chung"],
+  ["translation", Languages, "Translation", "Dịch thuật"],
+  ["realtime", MonitorCog, "Realtime", "Thời gian thực"],
+  ["shortcuts", Keyboard, "Shortcuts", "Phím tắt"]
+] as const;
+
+const modes = [
+  ["fullscreen", "Full screen", "Toàn màn hình"],
+  ["subtitle", "Subtitle", "Phụ đề"],
+  ["game-dialogue", "Game dialogue", "Hội thoại game"],
+  ["document", "Document", "Tài liệu"],
+  ["comic", "Comic / manga", "Truyện tranh"]
+] as const;
+
+const defaultSettings: DesktopSettings = {
+  appLanguage: "en",
+  sourceLanguage: "auto",
+  targetLanguage: "vi",
+  ocrMode: "document",
+  ignoredTerms: "HP, MP, EXP",
+  preserveAcronymsAndTechnicalTerms: true,
+  closePopupOnOutsideClick: true,
+  allowPopupDragging: true,
+  showOcrDebugBoxes: false,
+  showPopupBeforeTranslationFinishes: false,
+  scanIntervalMs: 500,
+  overlayOpacityPercent: 85,
+  overlayFontScalePercent: 100,
+  useDarkOverlayBlocks: true,
+  maxOcrFragments: 24,
+  translationInstruction: "Translate naturally and clearly. Keep proper names, technical terms, HP/MP/EXP unchanged. Do not add explanations.",
+  shortcuts: defaultShortcuts
+};
 
 export function SettingsPage({ app }: RouteProps) {
-  const { snapshot, bridge, run } = app;
+  const { snapshot, bridge, busy, run } = app;
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const [baseline, setBaseline] = useState<DesktopSettings>(() => cloneSettings(defaultSettings));
+  const [draft, setDraft] = useState<DesktopSettings>(() => cloneSettings(defaultSettings));
+  const [capturing, setCapturing] = useState<ShortcutName>();
+
+  const serverSettings = snapshot?.settings;
+  const serverFingerprint = useMemo(
+    () => serverSettings ? JSON.stringify(serverSettings) : "",
+    [serverSettings]
+  );
+  const baselineFingerprint = useMemo(
+    () => baseline ? JSON.stringify(baseline) : "",
+    [baseline]
+  );
+
+  useEffect(() => {
+    if (!serverSettings || serverFingerprint === baselineFingerprint) return;
+    setBaseline(cloneSettings(serverSettings));
+    setDraft(cloneSettings(serverSettings));
+    setCapturing(undefined);
+  }, [serverSettings, serverFingerprint, baselineFingerprint]);
+
+  const isVietnamese = draft?.appLanguage === "vi";
+  const t = (english: string, vietnamese: string) => isVietnamese ? vietnamese : english;
+  const dirty = Boolean(draft && baseline && JSON.stringify(draft) !== JSON.stringify(baseline));
+  const shortcutValues = draft ? Object.values(draft.shortcuts).map((value) => value.toLowerCase()) : [];
+  const hasDuplicateShortcut = new Set(shortcutValues).size !== shortcutValues.length;
+  const disabled = Boolean(busy) || !draft;
+
+  function update<K extends keyof DesktopSettings>(key: K, value: DesktopSettings[K]) {
+    setDraft((current) => current ? { ...current, [key]: value } : current);
+  }
+
+  function updateShortcut(name: ShortcutName, value: string) {
+    setDraft((current) => current ? {
+      ...current,
+      shortcuts: { ...current.shortcuts, [name]: value }
+    } : current);
+  }
+
+  function captureShortcut(event: KeyboardEvent<HTMLButtonElement>, name: ShortcutName) {
+    if (capturing !== name) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const shortcut = shortcutFromEvent(event);
+    if (!shortcut) return;
+    updateShortcut(name, shortcut);
+    setCapturing(undefined);
+  }
+
+  function updatePrivacy(allowRemoteTextProcessing: boolean, allowLocalDiagnostics: boolean) {
+    void run(t("Saving privacy", "Đang lưu quyền riêng tư"), () => bridge.command("privacy.updateConsent", {
+      allowRemoteTextProcessing,
+      allowLocalDiagnostics
+    }));
+  }
+
+  function saveSettings() {
+    if (!draft || hasDuplicateShortcut) return;
+    void run(t("Saving settings", "Đang lưu cài đặt"), () => bridge.command("settings.update", draft));
+  }
+
+  if (!draft) {
+    return <section className="page settings-page settings-loading">{t("Loading settings...", "Đang tải cài đặt...")}</section>;
+  }
+
   return (
-    <section className="settings-page">
-      <div className="settings-intro">
-        <p className="section-number">SETTINGS / PRIVACY</p>
-        <h2>Your reading stays yours.</h2>
-        <p>LexVerse keeps capture and OCR on this device. Only text that needs translation leaves the app after consent.</p>
-      </div>
-      <div className="settings-list">
-        <label className="setting-row">
-          <span><strong>External text processing</strong><small>Allow selected, typed, or OCR text to reach the configured translation provider.</small></span>
-          <input
-            type="checkbox"
-            checked={snapshot?.privacy.allowRemoteTextProcessing ?? false}
-            onChange={(event) => void run("Saving privacy", () => bridge.command("privacy.updateConsent", {
-              allowRemoteTextProcessing: event.target.checked,
-              allowLocalDiagnostics: snapshot?.privacy.allowLocalDiagnostics ?? true
-            }))}
-          />
-        </label>
-        <label className="setting-row">
-          <span><strong>Local performance diagnostics</strong><small>Store bounded, content-free timing metrics on this device.</small></span>
-          <input
-            type="checkbox"
-            checked={snapshot?.privacy.allowLocalDiagnostics ?? true}
-            onChange={(event) => void run("Saving diagnostics", () => bridge.command("privacy.updateConsent", {
-              allowRemoteTextProcessing: snapshot?.privacy.allowRemoteTextProcessing ?? false,
-              allowLocalDiagnostics: event.target.checked
-            }))}
-          />
-        </label>
+    <section className="page settings-page">
+      <header className="page-heading settings-heading">
+        <div>
+          <p className="page-kicker">{t("SETTINGS", "CÀI ĐẶT")}</p>
+          <h2>{t("Application preferences", "Tùy chỉnh ứng dụng")}</h2>
+          <p>{t("Translation, OCR, overlay and shortcut controls.", "Điều khiển dịch thuật, OCR, lớp phủ và phím tắt.")}</p>
+        </div>
+        <div className="settings-save-area">
+          {dirty && <span className="unsaved-indicator">{t("Unsaved", "Chưa lưu")}</span>}
+          <button
+            type="button"
+            className="button button-primary"
+            disabled={disabled || !dirty || hasDuplicateShortcut}
+            onClick={saveSettings}
+          >
+            <Save size={17} /> {busy === t("Saving settings", "Đang lưu cài đặt") ? t("Saving...", "Đang lưu...") : t("Save changes", "Lưu thay đổi")}
+          </button>
+        </div>
+      </header>
+
+      <div className="settings-layout">
+        <nav className="settings-tabs" aria-label={t("Settings sections", "Các mục cài đặt")}>
+          {tabs.map(([id, Icon, english, vietnamese]) => (
+            <button
+              type="button"
+              key={id}
+              className={activeTab === id ? "settings-tab-active" : ""}
+              aria-current={activeTab === id ? "page" : undefined}
+              onClick={() => setActiveTab(id)}
+            >
+              <Icon size={18} />
+              <span>{t(english, vietnamese)}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="panel settings-surface">
+          {activeTab === "general" && (
+            <div className="settings-view">
+              <SettingsTitle icon={SlidersHorizontal} eyebrow={t("APPLICATION", "ỨNG DỤNG")} title={t("General", "Cài đặt chung")} />
+
+              <div className="settings-form-section">
+                <div className="settings-section-label">{t("Display language", "Ngôn ngữ hiển thị")}</div>
+                <div className="segmented-control compact-segments" role="group" aria-label={t("Display language", "Ngôn ngữ hiển thị")}>
+                  <button type="button" className={draft.appLanguage === "en" ? "segment-active" : ""} onClick={() => update("appLanguage", "en")}>English</button>
+                  <button type="button" className={draft.appLanguage === "vi" ? "segment-active" : ""} onClick={() => update("appLanguage", "vi")}>Tiếng Việt</button>
+                </div>
+              </div>
+
+              <div className="settings-form-section">
+                <div className="settings-section-label">{t("Default language pair", "Cặp ngôn ngữ mặc định")}</div>
+                <div className="default-language-grid">
+                  <label>
+                    <span>{t("Source language", "Ngôn ngữ nguồn")}</span>
+                    <select value={draft.sourceLanguage} onChange={(event) => update("sourceLanguage", event.target.value)}>
+                      {languages.map(([value]) => <option key={value} value={value}>{languageName(value, isVietnamese)}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>{t("Target language", "Ngôn ngữ đích")}</span>
+                    <select value={draft.targetLanguage} onChange={(event) => update("targetLanguage", event.target.value)}>
+                      {languages.filter(([value]) => value !== "auto").map(([value]) => (
+                        <option key={value} value={value}>{languageName(value, isVietnamese)}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div className="settings-form-section">
+                <h4 className="settings-section-label section-label-with-icon"><ShieldCheck size={15} /> {t("Privacy", "Quyền riêng tư")}</h4>
+                <ToggleRow
+                  label={t("External text processing", "Xử lý văn bản bên ngoài")}
+                  detail={t("Selected, typed and OCR text", "Văn bản được chọn, nhập và nhận dạng OCR")}
+                  checked={snapshot?.privacy.allowRemoteTextProcessing ?? false}
+                  disabled={Boolean(busy)}
+                  onChange={(checked) => updatePrivacy(checked, snapshot?.privacy.allowLocalDiagnostics ?? true)}
+                />
+                <ToggleRow
+                  label={t("Local performance diagnostics", "Chẩn đoán hiệu năng cục bộ")}
+                  detail={t("Content-free timing metrics", "Chỉ số thời gian không chứa nội dung")}
+                  checked={snapshot?.privacy.allowLocalDiagnostics ?? true}
+                  disabled={Boolean(busy)}
+                  onChange={(checked) => updatePrivacy(snapshot?.privacy.allowRemoteTextProcessing ?? false, checked)}
+                />
+              </div>
+
+              <div className="settings-meta-row">
+                <span>{snapshot?.moduleCount ?? 0} {t("native modules", "mô-đun native")}</span>
+                <span>{t("OCR on device", "OCR trên thiết bị")}</span>
+                <button type="button" className="button button-quiet" onClick={() => void run(t("Opening help", "Đang mở trợ giúp"), () => bridge.command("external.openHelp"))}>
+                  <CircleHelp size={16} /> {t("Help and source", "Trợ giúp và mã nguồn")}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "translation" && (
+            <div className="settings-view">
+              <SettingsTitle icon={Languages} eyebrow={t("TRANSLATION", "DỊCH THUẬT")} title={t("Language processing", "Xử lý ngôn ngữ")} />
+
+              <div className="settings-form-section">
+                <div className="settings-section-label">{t("OCR mode", "Chế độ OCR")}</div>
+                <div className="mode-selector" role="group" aria-label={t("OCR mode", "Chế độ OCR")}>
+                  {modes.map(([value, english, vietnamese]) => (
+                    <button
+                      type="button"
+                      key={value}
+                      className={draft.ocrMode === value ? "mode-active" : ""}
+                      onClick={() => update("ocrMode", value)}
+                    >
+                      {t(english, vietnamese)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="settings-form-section form-section-grid">
+                <label className="field-stack">
+                  <span>{t("Ignored terms", "Từ bỏ qua")}</span>
+                  <textarea
+                    value={draft.ignoredTerms}
+                    maxLength={2_000}
+                    rows={4}
+                    placeholder="HP, MP, EXP"
+                    onChange={(event) => update("ignoredTerms", event.target.value)}
+                  />
+                </label>
+                <label className="field-stack">
+                  <span>{t("Translation instruction", "Văn phong dịch")}</span>
+                  <textarea
+                    value={draft.translationInstruction}
+                    maxLength={4_000}
+                    rows={4}
+                    onChange={(event) => update("translationInstruction", event.target.value)}
+                  />
+                </label>
+              </div>
+
+              <div className="settings-form-section">
+                <ToggleRow label={t("Preserve acronyms and technical terms", "Giữ acronym và thuật ngữ kỹ thuật")} checked={draft.preserveAcronymsAndTechnicalTerms} onChange={(checked) => update("preserveAcronymsAndTechnicalTerms", checked)} />
+                <ToggleRow label={t("Close popup on outside click", "Đóng popup khi bấm bên ngoài")} checked={draft.closePopupOnOutsideClick} onChange={(checked) => update("closePopupOnOutsideClick", checked)} />
+                <ToggleRow label={t("Allow popup dragging", "Cho phép kéo popup")} checked={draft.allowPopupDragging} onChange={(checked) => update("allowPopupDragging", checked)} />
+                <ToggleRow label={t("Show popup while translating", "Hiện popup trong khi đang dịch")} checked={draft.showPopupBeforeTranslationFinishes} onChange={(checked) => update("showPopupBeforeTranslationFinishes", checked)} />
+              </div>
+            </div>
+          )}
+
+          {activeTab === "realtime" && (
+            <div className="settings-view">
+              <SettingsTitle icon={Gauge} eyebrow={t("REALTIME", "THỜI GIAN THỰC")} title={t("Overlay tuning", "Tinh chỉnh lớp phủ")} />
+
+              <div className="settings-form-section range-settings">
+                <RangeSetting label={t("Scan interval", "Chu kỳ quét")} value={draft.scanIntervalMs} min={250} max={2_000} step={50} output={`${draft.scanIntervalMs} ms`} onChange={(value) => update("scanIntervalMs", value)} />
+                <RangeSetting label={t("Overlay opacity", "Độ mờ lớp phủ")} value={draft.overlayOpacityPercent} min={40} max={100} step={1} output={`${draft.overlayOpacityPercent}%`} onChange={(value) => update("overlayOpacityPercent", value)} />
+                <RangeSetting label={t("Text scale", "Cỡ chữ")} value={draft.overlayFontScalePercent} min={60} max={180} step={5} output={`${draft.overlayFontScalePercent}%`} onChange={(value) => update("overlayFontScalePercent", value)} />
+              </div>
+
+              <div className="settings-form-section realtime-options-grid">
+                <label className="number-setting">
+                  <span>{t("Maximum OCR fragments", "Số mảnh OCR tối đa")}</span>
+                  <input type="number" min={4} max={64} step={1} value={draft.maxOcrFragments} onChange={(event) => update("maxOcrFragments", Math.min(64, Math.max(4, event.target.valueAsNumber || 4)))} />
+                </label>
+                <div className="palette-setting">
+                  <span>{t("Overlay palette", "Bảng màu lớp phủ")}</span>
+                  <div className="segmented-control palette-segments" role="group" aria-label={t("Overlay palette", "Bảng màu lớp phủ")}>
+                    <button type="button" className={draft.useDarkOverlayBlocks ? "segment-active" : ""} onClick={() => update("useDarkOverlayBlocks", true)}><i className="palette-swatch swatch-dark" />{t("Dark", "Tối")}</button>
+                    <button type="button" className={!draft.useDarkOverlayBlocks ? "segment-active" : ""} onClick={() => update("useDarkOverlayBlocks", false)}><i className="palette-swatch swatch-light" />{t("Light", "Sáng")}</button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="settings-form-section">
+                <ToggleRow label={t("Show OCR debug boxes", "Hiện khung debug OCR")} detail={t("Source block geometry", "Khung vị trí văn bản nguồn")} checked={draft.showOcrDebugBoxes} onChange={(checked) => update("showOcrDebugBoxes", checked)} />
+              </div>
+            </div>
+          )}
+
+          {activeTab === "shortcuts" && (
+            <div className="settings-view">
+              <SettingsTitle icon={Keyboard} eyebrow={t("KEYBOARD", "BÀN PHÍM")} title={t("Shortcuts", "Phím tắt")} />
+
+              <div className="settings-form-section shortcut-settings">
+                <ShortcutRow label={t("Popup translation", "Dịch bằng popup")} name="popup" value={draft.shortcuts.popup} capturing={capturing} setCapturing={setCapturing} onKeyDown={captureShortcut} />
+                <ShortcutRow label={t("Region translation", "Dịch theo vùng")} name="region" value={draft.shortcuts.region} capturing={capturing} setCapturing={setCapturing} onKeyDown={captureShortcut} />
+                <ShortcutRow label={t("Full-screen realtime", "Dịch toàn màn hình")} name="fullScreen" value={draft.shortcuts.fullScreen} capturing={capturing} setCapturing={setCapturing} onKeyDown={captureShortcut} />
+                <ShortcutRow label={t("Stop realtime", "Dừng dịch realtime")} name="stop" value={draft.shortcuts.stop} capturing={capturing} setCapturing={setCapturing} onKeyDown={captureShortcut} />
+                <ShortcutRow label={t("Clear overlay", "Xóa lớp phủ")} name="reset" value={draft.shortcuts.reset} capturing={capturing} setCapturing={setCapturing} onKeyDown={captureShortcut} />
+              </div>
+
+              {hasDuplicateShortcut && <p className="settings-inline-error" role="alert">{t("Each action needs a unique shortcut.", "Mỗi thao tác cần một phím tắt riêng.")}</p>}
+
+              <div className="settings-footer-actions">
+                <button type="button" className="button button-secondary" onClick={() => setDraft((current) => current ? { ...current, shortcuts: { ...defaultShortcuts } } : current)}>
+                  <RotateCcw size={16} /> {t("Restore shortcut defaults", "Khôi phục phím tắt mặc định")}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
+}
+
+function SettingsTitle({ icon: Icon, eyebrow, title }: { icon: typeof ScanText; eyebrow: string; title: string }) {
+  return (
+    <header className="settings-view-heading">
+      <div className="panel-icon panel-icon-orange"><Icon size={19} /></div>
+      <div><p className="panel-kicker">{eyebrow}</p><h3>{title}</h3></div>
+    </header>
+  );
+}
+
+function ToggleRow({ label, detail, checked, disabled, onChange }: {
+  label: string;
+  detail?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="setting-row">
+      <span><strong>{label}</strong>{detail && <small>{detail}</small>}</span>
+      <span className="toggle"><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /><span aria-hidden="true" /></span>
+    </label>
+  );
+}
+
+function RangeSetting({ label, value, min, max, step, output, onChange }: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  output: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="range-setting">
+      <span><strong>{label}</strong><output>{output}</output></span>
+      <input type="range" value={value} min={min} max={max} step={step} onChange={(event) => onChange(event.target.valueAsNumber)} />
+    </label>
+  );
+}
+
+function ShortcutRow({ label, name, value, capturing, setCapturing, onKeyDown }: {
+  label: string;
+  name: ShortcutName;
+  value: string;
+  capturing?: ShortcutName;
+  setCapturing: (name?: ShortcutName) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>, name: ShortcutName) => void;
+}) {
+  const isCapturing = capturing === name;
+  return (
+    <div className="shortcut-setting-row">
+      <span>{label}</span>
+      <button
+        type="button"
+        data-shortcut-capture="true"
+        className={isCapturing ? "shortcut-capture-active" : ""}
+        onClick={() => setCapturing(isCapturing ? undefined : name)}
+        onKeyDown={(event) => onKeyDown(event, name)}
+        onBlur={() => isCapturing && setCapturing(undefined)}
+      >
+        <kbd>{isCapturing ? "..." : displayShortcut(value)}</kbd>
+      </button>
+    </div>
+  );
+}
+
+function shortcutFromEvent(event: KeyboardEvent<HTMLButtonElement>) {
+  const ignored = ["Control", "Shift", "Alt", "Meta", "AltGraph", "Tab"];
+  if (ignored.includes(event.key)) return undefined;
+  const parts: string[] = [];
+  if (event.ctrlKey) parts.push("Ctrl");
+  if (event.altKey) parts.push("Alt");
+  if (event.shiftKey) parts.push("Shift");
+  if (event.metaKey) parts.push("Win");
+  const key = normalizeKey(event.key);
+  if (!key) return undefined;
+  parts.push(key);
+  return parts.join("+");
+}
+
+function normalizeKey(key: string) {
+  if (key === " ") return "Space";
+  if (key === "Esc") return "Escape";
+  if (key.length === 1) return key.toUpperCase();
+  return key;
+}
+
+function displayShortcut(shortcut: string) {
+  return shortcut.replaceAll("+", " + ").replace("Escape", "Esc");
+}
+
+function cloneSettings(settings: DesktopSettings): DesktopSettings {
+  return { ...settings, shortcuts: { ...settings.shortcuts } };
+}
+
+function languageName(code: string, vietnamese: boolean) {
+  const names: Record<string, [string, string]> = {
+    auto: ["Auto detect", "Tự động nhận diện"],
+    en: ["English", "Tiếng Anh"],
+    ja: ["Japanese", "Tiếng Nhật"],
+    ko: ["Korean", "Tiếng Hàn"],
+    zh: ["Chinese", "Tiếng Trung"],
+    vi: ["Vietnamese", "Tiếng Việt"]
+  };
+  return names[code]?.[vietnamese ? 1 : 0] ?? code.toUpperCase();
 }
