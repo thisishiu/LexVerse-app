@@ -204,10 +204,8 @@ public sealed class AppCompositionRoot : IDisposable
         var token = GetAbsoluteUri("LEXVERSE_OAUTH_TOKEN_ENDPOINT");
         var account = GetAbsoluteUri("LEXVERSE_ACCOUNT_ENDPOINT");
         var clientId = Environment.GetEnvironmentVariable("LEXVERSE_OAUTH_CLIENT_ID");
-        var scopes = Environment.GetEnvironmentVariable("LEXVERSE_OAUTH_SCOPES")?
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (authorization is null || token is null || account is null ||
-            string.IsNullOrWhiteSpace(clientId) || scopes is null or { Length: 0 })
+            string.IsNullOrWhiteSpace(clientId))
         {
             return new UnavailableAccountSessionProvider();
         }
@@ -221,7 +219,7 @@ public sealed class AppCompositionRoot : IDisposable
                 "session.dat");
             return new OAuthPkceAccountSessionProvider(
                 httpClient,
-                new OAuthNativeAppOptions(authorization, token, account, clientId, scopes),
+                new OAuthNativeAppOptions(authorization, token, account, clientId),
                 new WindowsDpapiAccountStore(storePath),
                 launcher);
         }

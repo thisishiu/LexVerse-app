@@ -24,7 +24,6 @@ Biến môi trường:
 - `LEXVERSE_OAUTH_TOKEN_ENDPOINT`
 - `LEXVERSE_ACCOUNT_ENDPOINT`
 - `LEXVERSE_OAUTH_CLIENT_ID`
-- `LEXVERSE_OAUTH_SCOPES`
 
 Endpoint phải là absolute HTTPS URI không chứa credential. Server phải đăng ký LexVerse là public native client, cho phép loopback callback với port tạm thời, bắt buộc PKCE và không yêu cầu desktop client secret.
 

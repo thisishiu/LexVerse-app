@@ -104,8 +104,7 @@ public sealed class CommerceTests
                 new Uri("https://identity.example.test/authorize"),
                 new Uri("https://identity.example.test/token"),
                 new Uri("https://api.example.test/v1/account"),
-                "lexverse-desktop",
-                ["openid", "offline_access", "lexverse.api"]),
+                "lexverse-desktop"),
             new WindowsDpapiAccountStore(storePath),
             launcher,
             new FixedTimeProvider(Now));
@@ -113,6 +112,15 @@ public sealed class CommerceTests
         var session = await provider.SignInAsync(cancellationToken);
 
         Assert.Equal("customer-1", session.SubjectId);
+        Assert.DoesNotContain("scope", launcher.Parameters.Keys);
+        Assert.Equal("code", launcher.Parameters["response_type"]);
+        Assert.Equal("lexverse-desktop", launcher.Parameters["client_id"]);
+        var redirectUri = new Uri(launcher.Parameters["redirect_uri"]);
+        Assert.Equal("http", redirectUri.Scheme);
+        Assert.Equal("127.0.0.1", redirectUri.Host);
+        Assert.Equal("/oauth/callback/", redirectUri.AbsolutePath);
+        Assert.True(redirectUri.Port > 0);
+        Assert.False(string.IsNullOrWhiteSpace(launcher.Parameters["state"]));
         Assert.Equal("S256", launcher.Parameters["code_challenge_method"]);
         Assert.Equal(launcher.Parameters["code_challenge"], PkceChallenge(handler.CodeVerifier));
         Assert.DoesNotContain("client_secret", handler.TokenForm.Keys);
@@ -161,8 +169,7 @@ public sealed class CommerceTests
                 new Uri("https://identity.example.test/authorize"),
                 new Uri("https://identity.example.test/token"),
                 new Uri("https://api.example.test/v1/account"),
-                "lexverse-desktop",
-                ["openid"]),
+                "lexverse-desktop"),
             new WindowsDpapiAccountStore(Path.Combine(directory, "session.dat")),
             launcher);
         var pending = provider.SignInAsync(cancellationToken);
@@ -294,7 +301,7 @@ public sealed class CommerceTests
                 var form = await request.Content!.ReadAsStringAsync(cancellationToken);
                 TokenForm = ParseQuery(form);
                 return Json("""
-                    {"access_token":"access-token-secret","refresh_token":"refresh-token-secret","token_type":"Bearer","expires_in":3600,"scope":"openid lexverse.api"}
+                    {"access_token":"access-token-secret","refresh_token":"refresh-token-secret","token_type":"Bearer","expires_in":3600}
                     """);
             }
 

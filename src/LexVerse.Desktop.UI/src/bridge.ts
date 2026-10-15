@@ -156,7 +156,9 @@ export class DesktopBridge {
       const timer = window.setTimeout(() => {
         this.pending.delete(id);
         reject(new Error("bridge-timeout"));
-      }, 30_000);
+      // Browser sign-in allows three minutes for user interaction, followed by
+      // token exchange, account/catalog requests, and feature access refresh.
+      }, type === "account.signIn" ? 300_000 : 30_000);
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
       this.transport!.postMessage(command);
     });

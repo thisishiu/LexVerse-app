@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using System.Net;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -17,6 +19,7 @@ using LexVerse.Core.Pipeline;
 using LexVerse.Core.Product;
 using LexVerse.Core.Translation;
 using LexVerse.Infrastructure.Windows;
+using LexVerse.Infrastructure.Diagnostics;
 
 namespace LexVerse.App;
 
@@ -183,7 +186,8 @@ public partial class MainWindow : Window
         _hwndSource = HwndSource.FromHwnd(handle);
         _hwndSource?.AddHook(WndProc);
 
-        _ = SetWindowDisplayAffinity(handle, WdaExcludeFromCapture);
+        // quy định ẩn app khi chụp màn hình
+        // _ = SetWindowDisplayAffinity(handle, WdaExcludeFromCapture);
         _ = TryApplyPopupHotkey(_desktopPreferences.Current.PopupShortcut);
         _status = _hotkeyRegistered
             ? $"Ready. Highlight text in another app and press {_registeredPopupShortcut}."
@@ -517,8 +521,9 @@ public partial class MainWindow : Window
             popup.Close();
             _status = $"Popup access unavailable: {exception.Decision.DenialReason}.";
         }
-        catch
+        catch (Exception exception)
         {
+            new LocalExceptionLog().Report("popup-translation", exception);
             if (!popup.IsVisible)
             {
                 popup.Show();
@@ -526,8 +531,8 @@ public partial class MainWindow : Window
 
             popup.ShowError(
                 "Translation unavailable",
-                "Check your provider credentials and network connection, then try again.");
-            _status = "Translation provider unavailable.";
+                GetPopupTranslationError(exception));
+            _status = GetPopupTranslationError(exception);
         }
         finally
         {
@@ -540,6 +545,29 @@ public partial class MainWindow : Window
             cancellation.Dispose();
         }
     }
+
+    private static string GetPopupTranslationError(Exception exception) => exception switch
+    {
+        Win32Exception =>
+            "Could not copy the selected text. Select text in an app running with the same permissions as LexVerse and try again.",
+        HttpRequestException { StatusCode: HttpStatusCode.Unauthorized } =>
+            "Your session has expired. Sign out and sign in again.",
+        HttpRequestException { StatusCode: HttpStatusCode.Forbidden } =>
+            "Your account does not have access to this translation feature. Check your plan.",
+        HttpRequestException { StatusCode: HttpStatusCode.TooManyRequests } =>
+            "The translation quota or request limit has been reached. Check your plan and try again later.",
+        HttpRequestException { StatusCode: HttpStatusCode.BadGateway } =>
+            "The server could not complete the translation with its provider (HTTP 502). Check the server translation logs.",
+        HttpRequestException { StatusCode: HttpStatusCode.GatewayTimeout } =>
+            "The translation provider timed out (HTTP 504). Check the server logs before retrying.",
+        HttpRequestException { StatusCode: { } status } =>
+            $"The server rejected the translation (HTTP {(int)status}). Check the server logs.",
+        HttpRequestException =>
+            "Cannot connect to the translation server. Check your network connection and server address.",
+        OperationCanceledException =>
+            "The translation request timed out. Check the server logs before retrying.",
+        _ => "Translation failed. Check your sign-in, desktop configuration, and local app error log."
+    };
 
     private PopupTranslationRequest CreateRequest()
     {

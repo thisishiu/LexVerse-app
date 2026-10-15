@@ -184,7 +184,6 @@ public sealed class OAuthPkceAccountSessionProvider : IAccountSessionProvider, I
             ["response_type"] = "code",
             ["client_id"] = _options.ClientId,
             ["redirect_uri"] = redirectUri.AbsoluteUri,
-            ["scope"] = string.Join(' ', _options.Scopes),
             ["code_challenge"] = challenge,
             ["code_challenge_method"] = "S256",
             ["state"] = state

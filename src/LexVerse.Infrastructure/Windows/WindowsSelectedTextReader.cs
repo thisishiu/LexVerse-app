@@ -147,6 +147,22 @@ public sealed class WindowsSelectedTextReader : ISelectedTextReader
     {
         [FieldOffset(0)]
         public KeyboardInput Keyboard;
+
+        // INPUT is a union whose size is determined by MOUSEINPUT, even when
+        // sending keyboard events. SendInput rejects a smaller cbSize.
+        [FieldOffset(0)]
+        public MouseInput Mouse;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseInput
+    {
+        public int X;
+        public int Y;
+        public uint MouseData;
+        public uint Flags;
+        public uint Time;
+        public UIntPtr ExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]
