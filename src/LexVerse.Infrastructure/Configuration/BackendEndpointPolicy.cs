@@ -6,7 +6,11 @@ public static class BackendEndpointPolicy
         string.Equals(Environment.GetEnvironmentVariable("LEXVERSE_ENVIRONMENT"), "Development", StringComparison.Ordinal) &&
         string.Equals(Environment.GetEnvironmentVariable("LEXVERSE_ALLOW_INSECURE_LOCALHOST"), "true", StringComparison.OrdinalIgnoreCase);
 
-    public static void LoadEnvironment() => DotEnvFile.LoadNearest();
+    public static void LoadEnvironment()
+    {
+        DotEnvFile.LoadNearest(".env.local");
+        DotEnvFile.LoadNearest();
+    }
 
     public static void Validate(Uri uri, string parameterName)
     {

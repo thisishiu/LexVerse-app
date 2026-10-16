@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { HelpTip } from "../../components/HelpTip";
+import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
 import {
   CircleHelp,
   Gauge,
@@ -132,11 +133,6 @@ export function SettingsPage({ app }: RouteProps) {
   return (
     <section className="page settings-page">
       <header className="page-heading settings-heading">
-        <div>
-          <p className="page-kicker">{t("SETTINGS", "CÀI ĐẶT")}</p>
-          <h2>{t("Application preferences", "Tùy chỉnh ứng dụng")}</h2>
-          <p>{t("Translation, OCR, overlay and shortcut controls.", "Điều khiển dịch thuật, OCR, lớp phủ và phím tắt.")}</p>
-        </div>
         <div className="settings-save-area">
           {dirty && <span className="unsaved-indicator">{t("Unsaved", "Chưa lưu")}</span>}
           <button
@@ -169,7 +165,7 @@ export function SettingsPage({ app }: RouteProps) {
         <div className="panel settings-surface">
           {activeTab === "general" && (
             <div className="settings-view">
-              <SettingsTitle icon={SlidersHorizontal} eyebrow={t("APPLICATION", "ỨNG DỤNG")} title={t("General", "Cài đặt chung")} />
+              <SettingsTitle icon={SlidersHorizontal} title={t("General", "Cài đặt chung")} />
 
               <div className="settings-form-section">
                 <div className="settings-section-label">{t("Display language", "Ngôn ngữ hiển thị")}</div>
@@ -203,6 +199,7 @@ export function SettingsPage({ app }: RouteProps) {
                 <h4 className="settings-section-label section-label-with-icon"><ShieldCheck size={15} /> {t("Privacy", "Quyền riêng tư")}</h4>
                 <ToggleRow
                   label={t("External text processing", "Xử lý văn bản bên ngoài")}
+                  inlineDetail
                   detail={t("Selected, typed and OCR text", "Văn bản được chọn, nhập và nhận dạng OCR")}
                   checked={snapshot?.privacy.allowRemoteTextProcessing ?? false}
                   disabled={Boolean(busy)}
@@ -210,6 +207,7 @@ export function SettingsPage({ app }: RouteProps) {
                 />
                 <ToggleRow
                   label={t("Local performance diagnostics", "Chẩn đoán hiệu năng cục bộ")}
+                  inlineDetail
                   detail={t("Content-free timing metrics", "Chỉ số thời gian không chứa nội dung")}
                   checked={snapshot?.privacy.allowLocalDiagnostics ?? true}
                   disabled={Boolean(busy)}
@@ -229,7 +227,7 @@ export function SettingsPage({ app }: RouteProps) {
 
           {activeTab === "translation" && (
             <div className="settings-view">
-              <SettingsTitle icon={Languages} eyebrow={t("TRANSLATION", "DỊCH THUẬT")} title={t("Language processing", "Xử lý ngôn ngữ")} />
+              <SettingsTitle icon={Languages} title={t("Language processing", "Xử lý ngôn ngữ")} />
 
               <div className="settings-form-section">
                 <div className="settings-section-label">{t("OCR mode", "Chế độ OCR")}</div>
@@ -280,7 +278,7 @@ export function SettingsPage({ app }: RouteProps) {
 
           {activeTab === "realtime" && (
             <div className="settings-view">
-              <SettingsTitle icon={Gauge} eyebrow={t("REALTIME", "THỜI GIAN THỰC")} title={t("Overlay tuning", "Tinh chỉnh lớp phủ")} />
+              <SettingsTitle icon={Gauge} title={t("Overlay tuning", "Tinh chỉnh lớp phủ")} />
 
               <div className="settings-form-section range-settings">
                 <RangeSetting label={t("Scan interval", "Chu kỳ quét")} value={draft.scanIntervalMs} min={250} max={2_000} step={50} output={`${draft.scanIntervalMs} ms`} onChange={(value) => update("scanIntervalMs", value)} />
@@ -310,7 +308,7 @@ export function SettingsPage({ app }: RouteProps) {
 
           {activeTab === "shortcuts" && (
             <div className="settings-view">
-              <SettingsTitle icon={Keyboard} eyebrow={t("KEYBOARD", "BÀN PHÍM")} title={t("Shortcuts", "Phím tắt")} />
+              <SettingsTitle icon={Keyboard} title={t("Shortcuts", "Phím tắt")} />
 
               <div className="settings-form-section shortcut-settings">
                 <ShortcutRow label={t("Popup translation", "Dịch bằng popup")} name="popup" value={draft.shortcuts.popup} capturing={capturing} setCapturing={setCapturing} onKeyDown={captureShortcut} />
@@ -335,27 +333,29 @@ export function SettingsPage({ app }: RouteProps) {
   );
 }
 
-function SettingsTitle({ icon: Icon, eyebrow, title }: { icon: typeof ScanText; eyebrow: string; title: string }) {
+function SettingsTitle({ icon: Icon, title }: { icon: typeof ScanText; title: string }) {
   return (
     <header className="settings-view-heading">
       <div className="panel-icon panel-icon-orange"><Icon size={19} /></div>
-      <div><p className="panel-kicker">{eyebrow}</p><h3>{title}</h3></div>
+      <div><h3>{title}</h3></div>
     </header>
   );
 }
 
-function ToggleRow({ label, detail, checked, disabled, onChange }: {
+function ToggleRow({ label, detail, inlineDetail = false, checked, disabled, onChange }: {
   label: string;
   detail?: string;
+  inlineDetail?: boolean;
   checked: boolean;
   disabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
+  const id = useId();
   return (
-    <label className="setting-row">
-      <span><strong>{label}</strong>{detail && <small>{detail}</small>}</span>
-      <span className="toggle"><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /><span aria-hidden="true" /></span>
-    </label>
+    <div className="setting-row">
+      <span><label htmlFor={id}><strong>{label}</strong></label>{detail && (inlineDetail ? <small>{detail}</small> : <HelpTip label={label}>{detail}</HelpTip>)}</span>
+      <span className="toggle"><input id={id} aria-label={label} type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /><span aria-hidden="true" /></span>
+    </div>
   );
 }
 

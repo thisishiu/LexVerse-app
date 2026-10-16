@@ -12,14 +12,14 @@ describe("desktop application shell", () => {
     window.history.replaceState(null, "", "/?preview=ready#/workspace");
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: "Move between languages" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Translate", level: 1 })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
-    expect(screen.getByRole("heading", { name: "Identity and access" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Account", level: 1 })).toBeInTheDocument();
     expect(await screen.findByText("LexVerse Pro - monthly")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.getByRole("heading", { name: "Application preferences" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Application settings", level: 1 })).toBeInTheDocument();
   });
 
   it("opens a settings deep link without visiting the workspace first", () => {

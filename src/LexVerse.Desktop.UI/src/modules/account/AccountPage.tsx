@@ -1,10 +1,10 @@
+import { HelpTip } from "../../components/HelpTip";
 import {
   CheckCircle2,
   CircleDollarSign,
   CloudOff,
   CreditCard,
   ExternalLink,
-  KeyRound,
   LogIn,
   LogOut,
   RefreshCw,
@@ -41,11 +41,6 @@ export function AccountPage({ app }: RouteProps) {
   return (
     <section className="page account-page">
       <header className="page-heading">
-        <div>
-          <p className="page-kicker">{t("ACCOUNT", "TÀI KHOẢN")}</p>
-          <h2>{t("Identity and access", "Danh tính và quyền truy cập")}</h2>
-          <p>{t("Manage your session, plan and current access state.", "Quản lý phiên đăng nhập, gói dịch vụ và quyền sử dụng.")}</p>
-        </div>
         <span className={`status-badge ${signedIn ? "status-success" : configured ? "status-neutral" : "status-warning"}`}>
           <span />
           {authenticating ? authenticationLabel : commerce?.status ?? t("Loading", "Đang tải")}
@@ -57,7 +52,6 @@ export function AccountPage({ app }: RouteProps) {
           <header className="panel-heading">
             <div className="panel-icon panel-icon-blue"><UserRound size={19} /></div>
             <div>
-              <p className="panel-kicker">{t("SESSION", "PHIÊN ĐĂNG NHẬP")}</p>
               <h3 id="identity-title">{t("LexVerse account", "Tài khoản LexVerse")}</h3>
             </div>
           </header>
@@ -75,7 +69,6 @@ export function AccountPage({ app }: RouteProps) {
               </div>
 
               <dl className="detail-list">
-                <div><dt>{t("Authentication", "Xác thực")}</dt><dd><KeyRound size={15} /> {t("Secure browser", "Trình duyệt bảo mật")}</dd></div>
                 <div><dt>{t("Session", "Phiên")}</dt><dd>{signedIn ? t("Active", "Đang hoạt động") : t("Signed out", "Đã đăng xuất")}</dd></div>
                 <div><dt>{t("Access state", "Trạng thái truy cập")}</dt><dd>{checkoutOpen ? t("Refresh required", "Cần đồng bộ") : commerce?.status ?? t("Loading", "Đang tải")}</dd></div>
               </dl>
@@ -141,7 +134,6 @@ export function AccountPage({ app }: RouteProps) {
             <div className="panel-heading-copy">
               <div className="panel-icon panel-icon-orange"><CreditCard size={19} /></div>
               <div>
-                <p className="panel-kicker">{t("SUBSCRIPTION", "GÓI DỊCH VỤ")}</p>
                 <h3 id="plan-title">{t("Plans", "Các gói")}</h3>
               </div>
             </div>
@@ -181,7 +173,7 @@ export function AccountPage({ app }: RouteProps) {
           ) : (
             <div className="empty-state">
               <CircleDollarSign size={27} />
-              <div><strong>{t("No plans available", "Chưa có gói khả dụng")}</strong><p>{t("The product catalog did not return a public offer.", "Danh mục sản phẩm chưa trả về gói công khai.")}</p></div>
+              <div><strong>{t("No plans available", "Chưa có gói khả dụng")}</strong><p>{t("Please check again later.", "Vui lòng kiểm tra lại sau.")}</p></div>
             </div>
           )}
 
@@ -189,7 +181,7 @@ export function AccountPage({ app }: RouteProps) {
             <div className="plan-footer">
               <div className="verified-payment">
                 <ShieldCheck size={17} />
-                <span>{t("Provider-verified checkout and signed entitlements", "Thanh toán được xác minh và quyền sử dụng có chữ ký")}</span>
+                <HelpTip label={t("Payment details", "Thông tin thanh toán")}>{t("Access is updated after payment confirmation.", "Quyền sử dụng được cập nhật sau khi thanh toán được xác nhận.")}</HelpTip>
               </div>
               <button
                 className="button button-primary"

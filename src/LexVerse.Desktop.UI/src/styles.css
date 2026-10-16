@@ -1,4 +1,5 @@
 @import "./tokens.css";
+@import "./assets/fonts.css";
 
 * {
   box-sizing: border-box;
@@ -8,7 +9,7 @@
 :root {
   color: var(--text);
   background: var(--canvas);
-  font-family: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+  font-family: "Be Vietnam Pro", "Segoe UI", sans-serif;
   font-synthesis: none;
   line-height: 1.45;
 }
@@ -146,7 +147,7 @@ input:disabled {
 }
 
 .side-nav button.nav-active {
-  border-color: #ffd7ba;
+  border-color: var(--border);
   background: var(--accent-soft);
   color: var(--accent-hover);
 }
@@ -1158,7 +1159,7 @@ input:disabled {
 }
 
 .settings-tabs button.settings-tab-active {
-  border-color: #ffd7ba;
+  border-color: var(--border);
   background: var(--accent-soft);
   color: var(--accent-hover);
 }

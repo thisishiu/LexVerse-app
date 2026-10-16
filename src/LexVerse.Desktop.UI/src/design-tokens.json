@@ -1,21 +1,21 @@
 {
   "color": {
-    "canvas": "#f4f6f8",
+    "canvas": "#f7f7f8",
     "surface": "#ffffff",
-    "surfaceMuted": "#f8fafc",
-    "text": "#172033",
-    "textMuted": "#687386",
-    "border": "#dce2ea",
-    "accent": "#f56600",
-    "accentSoft": "#fff1e6",
+    "surfaceMuted": "#fafafa",
+    "text": "#242428",
+    "textMuted": "#64646e",
+    "border": "#e4e4e7",
+    "accent": "#29292e",
+    "accentSoft": "#ededf0",
     "success": "#1f9d55",
     "warning": "#b86200",
     "danger": "#c93c37",
     "info": "#2769c5"
   },
   "radius": {
-    "small": "6px",
-    "medium": "8px"
+    "small": "10px",
+    "medium": "12px"
   },
   "motion": {
     "fast": "140ms",

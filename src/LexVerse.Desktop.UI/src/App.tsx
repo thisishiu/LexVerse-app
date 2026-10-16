@@ -91,7 +91,7 @@ export function App() {
           <div className="brand-mark" aria-hidden="true">Lx</div>
           <div className="brand-copy">
             <strong>LexVerse</strong>
-            <span>{t("Desktop translator", "Trình dịch desktop")}</span>
+
           </div>
         </div>
 
@@ -104,6 +104,7 @@ export function App() {
                 key={id}
                 className={route === id ? "nav-active" : ""}
                 aria-current={route === id ? "page" : undefined}
+                aria-label={routeCopy[id][isVietnamese ? 1 : 0].label}
                 onClick={() => navigate(id)}
                 title={routeCopy[id][isVietnamese ? 1 : 0].label}
               >
@@ -114,13 +115,12 @@ export function App() {
           })}
         </nav>
 
-        <button type="button" className="sidebar-account" onClick={() => navigate("account")}>
+        <button type="button" aria-label={t("Open account", "Mở tài khoản")} className="sidebar-account" onClick={() => navigate("account")}>
           <span className="sidebar-avatar" aria-hidden="true">
             {app.snapshot?.commerce.displayName?.trim().charAt(0).toUpperCase() ?? "G"}
           </span>
           <span>
             <strong>{app.snapshot?.commerce.displayName ?? t("Guest", "Khách")}</strong>
-            <small>{app.snapshot?.commerce.status ?? t("Connecting", "Đang kết nối")}</small>
           </span>
         </button>
       </aside>
@@ -129,7 +129,7 @@ export function App() {
         <header className="topbar">
           <div className="topbar-title">
             <h1>{localizedRoute.title}</h1>
-            <p>{localizedRoute.description}</p>
+
           </div>
           <div className="topbar-tools">
             <div className="hotkey-status" title={app.snapshot?.hotkey ?? "Global shortcut loading"}>
@@ -148,7 +148,7 @@ export function App() {
           <div className="error-banner" role="alert">
             <CircleAlert size={18} />
             <span>{errorMessage(app.error, isVietnamese)}</span>
-            <button type="button" onClick={() => app.setError(undefined)} aria-label="Dismiss error" title="Dismiss">
+            <button type="button" onClick={() => app.setError(undefined)} aria-label={t("Dismiss error", "Đóng thông báo lỗi")} title={t("Dismiss", "Đóng")}>
               <X size={17} />
             </button>
           </div>
@@ -160,8 +160,8 @@ export function App() {
 
         <footer className="app-statusbar">
           <span className={`status-dot ${app.error ? "status-dot-error" : ""}`} />
-          <p>{app.busy ?? app.snapshot?.status ?? t("Loading desktop modules", "Đang tải mô-đun desktop")}</p>
-          <span>{app.snapshot?.moduleCount ?? 0} {t("modules", "mô-đun")}</span>
+          <p role="status">{app.busy ?? (app.error ? errorMessage(app.error, Boolean(isVietnamese)) : "")}</p>
+
         </footer>
       </main>
     </div>
@@ -170,16 +170,16 @@ export function App() {
 
 const routeCopy = {
   workspace: [
-    { label: "Translate", title: "Translation workspace", description: "Quick text and live screen translation" },
-    { label: "Dịch", title: "Không gian dịch thuật", description: "Dịch nhanh văn bản và màn hình theo thời gian thực" }
+    { label: "Translate", title: "Translate" },
+    { label: "Dịch", title: "Dịch" }
   ],
   account: [
-    { label: "Account", title: "Account and access", description: "Identity, plans and entitlements" },
-    { label: "Tài khoản", title: "Tài khoản và quyền truy cập", description: "Danh tính, gói dịch vụ và quyền sử dụng" }
+    { label: "Account", title: "Account" },
+    { label: "Tài khoản", title: "Tài khoản" }
   ],
   settings: [
-    { label: "Settings", title: "Application settings", description: "Translation, realtime, privacy and shortcuts" },
-    { label: "Cài đặt", title: "Cài đặt ứng dụng", description: "Dịch thuật, realtime, quyền riêng tư và phím tắt" }
+    { label: "Settings", title: "Application settings" },
+    { label: "Cài đặt", title: "Cài đặt ứng dụng" }
   ]
 } as const;
 

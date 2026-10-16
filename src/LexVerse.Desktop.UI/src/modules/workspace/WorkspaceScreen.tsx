@@ -71,19 +71,6 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
 
   return (
     <section className="page workspace-page">
-      <header className="page-heading workspace-heading">
-        <div>
-          <p className="page-kicker">{t("TRANSLATE", "DỊCH THUẬT")}</p>
-          <h2>{t("Move between languages", "Dịch liền mạch giữa các ngôn ngữ")}</h2>
-          <p>{t("Translate text directly or keep a selected screen region live.", "Dịch trực tiếp văn bản hoặc theo dõi một vùng màn hình.")}</p>
-        </div>
-        <div className="language-summary" aria-label="Current language pair">
-          <Languages size={17} />
-          <strong>{languageLabel(sourceLanguage, isVietnamese)}</strong>
-          <span>{t("to", "sang")}</span>
-          <strong>{languageLabel(targetLanguage, isVietnamese)}</strong>
-        </div>
-      </header>
 
       <div className="workspace-grid">
         <form className="panel translator-panel" onSubmit={translate}>
@@ -91,7 +78,6 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
             <div className="panel-heading-copy">
               <div className="panel-icon panel-icon-orange"><Languages size={19} /></div>
               <div>
-                <p className="panel-kicker">{t("QUICK TRANSLATION", "DỊCH NHANH")}</p>
                 <h3>{t("Text translator", "Dịch văn bản")}</h3>
               </div>
             </div>
@@ -177,11 +163,10 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
             <header className="panel-heading">
               <div className="panel-icon panel-icon-green"><MonitorUp size={19} /></div>
               <div>
-                <p className="panel-kicker">{t("SCREEN TRANSLATION", "DỊCH MÀN HÌNH")}</p>
                 <h3 id="live-title">{t("Live translation", "Dịch thời gian thực")}</h3>
               </div>
               <span className={`status-badge ${realtimeRunning ? "status-success" : "status-neutral"}`}>
-                <span /> {realtimeStatus}
+                <span /> {formatRealtimeStatus(realtimeStatus, isVietnamese)}
               </span>
             </header>
 
@@ -214,7 +199,22 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
               </button>
             </div>
 
-            <dl className="detail-list realtime-details">
+            <div className="overlay-action">
+              <button
+                    type="button"
+                    className="icon-button icon-button-small"
+                    disabled={disabled}
+                    onClick={() => void run(t("Clearing overlay", "Đang xóa lớp phủ"), () => bridge.command("realtime.resetOverlay"))}
+                    aria-label={t("Clear overlay", "Xóa lớp phủ")}
+                    title={t("Clear overlay", "Xóa lớp phủ")}
+                  >
+                    <Eraser size={15} />
+              </button>
+              <span>{t("Clear overlay", "Xóa lớp phủ")}</span>
+            </div>
+            <details className="realtime-more">
+              <summary>{t("Screen details", "Chi tiết màn hình")}</summary>
+              <dl className="detail-list realtime-details">
               <div><dt>OCR</dt><dd>{t("Local", "Cục bộ")}</dd></div>
               <div><dt>{t("Mode", "Chế độ")}</dt><dd>{formatMode(snapshot?.settings.ocrMode, isVietnamese)}</dd></div>
               <div><dt>{t("Frame time", "Thời gian khung")}</dt><dd>{formatFrameTime(snapshot?.realtime.lastFrameMilliseconds, isVietnamese)}</dd></div>
@@ -224,22 +224,9 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
                   {snapshot?.realtime.performanceBudgetExceeded ? t("Over budget", "Quá ngưỡng") : t("Normal", "Bình thường")}
                 </dd>
               </div>
-              <div>
-                <dt>{t("Overlay", "Lớp phủ")}</dt>
-                <dd>
-                  <button
-                    type="button"
-                    className="icon-button icon-button-small"
-                    disabled={disabled}
-                    onClick={() => void run(t("Clearing overlay", "Đang xóa lớp phủ"), () => bridge.command("realtime.resetOverlay"))}
-                    aria-label={t("Clear overlay", "Xóa lớp phủ")}
-                    title={t("Clear overlay", "Xóa lớp phủ")}
-                  >
-                    <Eraser size={15} />
-                  </button>
-                </dd>
-              </div>
-            </dl>
+
+              </dl>
+            </details>
 
             {!remoteProcessingAllowed && (
               <div className="inline-notice notice-warning compact-notice">
@@ -254,14 +241,13 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
             <header className="panel-heading">
               <div className="panel-icon panel-icon-blue"><Keyboard size={19} /></div>
               <div>
-                <p className="panel-kicker">{t("POPUP TRANSLATION", "DỊCH POPUP")}</p>
                 <h3 id="popup-title">{t("Selected text", "Văn bản đã chọn")}</h3>
               </div>
             </header>
             <div className="shortcut-row">
               <div>
                 <span>{t("Translate selected text", "Dịch văn bản đã chọn")}</span>
-                <strong>{snapshot?.hotkey ?? t("Registering shortcut", "Đang đăng ký phím tắt")}</strong>
+
               </div>
               <div className="shortcut-controls">
                 <kbd>{snapshot?.settings.shortcuts.popup ?? "F6"}</kbd>
@@ -319,3 +305,17 @@ const modesVi: Record<string, string> = {
   document: "Tài liệu",
   comic: "Truyện tranh"
 };
+
+
+function formatRealtimeStatus(status: string, vietnamese: boolean) {
+  const labels: Record<string, [string, string]> = {
+    loading: ["Loading", "Đang tải"],
+    stopped: ["Stopped", "Đã dừng"],
+    starting: ["Starting", "Đang bắt đầu"],
+    running: ["Running", "Đang dịch"],
+    stopping: ["Stopping", "Đang dừng"],
+    faulted: ["Error", "Lỗi"],
+    error: ["Error", "Lỗi"]
+  };
+  return labels[status]?.[vietnamese ? 1 : 0] ?? status;
+}
