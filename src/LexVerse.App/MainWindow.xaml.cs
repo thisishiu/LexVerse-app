@@ -300,9 +300,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        await RunPopupAsync(
+        await RunTranslationAsync(
             token => _popupModule.UseCase.TranslateTextAsync(text, CreateRequest(), token),
             "Translating quick text…",
+            showPopup: false,
             translation => _lastQuickTranslation = translation);
     }
 
@@ -456,14 +457,16 @@ public partial class MainWindow : Window
 
     private async Task RunSelectedTextPopupAsync()
     {
-        await RunPopupAsync(
+        await RunTranslationAsync(
             token => _popupModule.UseCase.TranslateSelectedTextAsync(CreateRequest(), token),
-            "Reading highlighted text…");
+            "Reading highlighted text…",
+            showPopup: true);
     }
 
-    private async Task RunPopupAsync(
+    private async Task RunTranslationAsync(
         Func<CancellationToken, Task<PopupTranslationResult>> operation,
         string loadingStatus,
+        bool showPopup,
         Action<string>? translationCompleted = null)
     {
         _popupCancellation?.Cancel();
@@ -472,9 +475,9 @@ public partial class MainWindow : Window
         _popupCancellation = cancellation;
         var cancellationToken = cancellation.Token;
         var preferences = _desktopPreferences.Current;
-        var popup = new TranslationPopupWindow(
+        var popup = showPopup ? new TranslationPopupWindow(
             preferences.ClosePopupOnOutsideClick,
-            preferences.AllowPopupDragging);
+            preferences.AllowPopupDragging) : null;
 
         _status = loadingStatus;
         PublishDesktopSnapshot();
@@ -482,7 +485,7 @@ public partial class MainWindow : Window
         try
         {
             var operationTask = operation(cancellationToken);
-            if (preferences.ShowPopupBeforeTranslationFinishes)
+            if (popup is not null && preferences.ShowPopupBeforeTranslationFinishes)
             {
                 popup.Show();
             }
@@ -490,17 +493,17 @@ public partial class MainWindow : Window
             var result = await operationTask;
             if (!result.HasSelection || result.Translation is null || result.SourceText is null)
             {
-                popup.Close();
+                popup?.Close();
                 _status = $"No highlighted text found. Select text and try {_desktopPreferences.Current.PopupShortcut} again.";
                 return;
             }
 
-            if (!popup.IsVisible)
+            if (popup is not null && !popup.IsVisible)
             {
                 popup.Show();
             }
 
-            popup.ShowResult(
+            popup?.ShowResult(
                 result.SourceText,
                 result.Translation.TranslatedText,
                 GetTargetLanguageLabel());
@@ -509,27 +512,27 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            popup.Close();
+            popup?.Close();
         }
         catch (RemoteProcessingConsentRequiredException)
         {
-            popup.Close();
+            popup?.Close();
             _status = "Enable external text processing under Privacy before translating.";
         }
         catch (FeatureAccessDeniedException exception)
         {
-            popup.Close();
-            _status = $"Popup access unavailable: {exception.Decision.DenialReason}.";
+            popup?.Close();
+            _status = $"{(showPopup ? "Popup" : "Translation")} access unavailable: {exception.Decision.DenialReason}.";
         }
         catch (Exception exception)
         {
             new LocalExceptionLog().Report("popup-translation", exception);
-            if (!popup.IsVisible)
+            if (popup is not null && !popup.IsVisible)
             {
                 popup.Show();
             }
 
-            popup.ShowError(
+            popup?.ShowError(
                 "Translation unavailable",
                 GetPopupTranslationError(exception));
             _status = GetPopupTranslationError(exception);
