@@ -158,7 +158,7 @@ export class DesktopBridge {
         reject(new Error("bridge-timeout"));
       // Browser sign-in allows three minutes for user interaction, followed by
       // token exchange, account/catalog requests, and feature access refresh.
-      }, type === "account.signIn" ? 300_000 : 30_000);
+      }, 30_000);
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
       this.transport!.postMessage(command);
     });

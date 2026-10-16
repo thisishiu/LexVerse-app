@@ -33,6 +33,8 @@ public sealed class CommerceCoordinator : IDisposable
         _commerce = commerce;
         _launcher = launcher;
         _featureAccess = featureAccess;
+        if (_accounts is IBrowserSignIn browser)
+            browser.SignInStateChanged += BrowserSignInStateChanged;
         State = new CommerceState(
             accounts.IsConfigured && commerce.IsConfigured
                 ? CommerceStatus.Loading
@@ -42,6 +44,42 @@ public sealed class CommerceCoordinator : IDisposable
     public CommerceState State { get; private set; }
 
     public event EventHandler<CommerceState>? StateChanged;
+    public BrowserSignInState Authentication { get; private set; } = new();
+    public Uri? PendingAuthorizationUri => (_accounts as IBrowserSignIn)?.PendingAuthorizationUri;
+    public void ReopenSignIn() => (_accounts as IBrowserSignIn)?.ReopenBrowser();
+    public void CancelSignIn()
+    {
+        _browserSignIn?.Cancel();
+        (_accounts as IBrowserSignIn)?.CancelSignIn();
+    }
+    private void BrowserSignInStateChanged(object? sender, BrowserSignInState state)
+    {
+        Authentication = state;
+        StateChanged?.Invoke(this, State);
+    }
+    private Task? _pendingSignIn;
+    private CancellationTokenSource? _browserSignIn;
+    public void BeginSignIn()
+    {
+        if (_pendingSignIn is { IsCompleted: false }) return;
+        BrowserSignInStateChanged(this, new("opening"));
+        _browserSignIn = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        _pendingSignIn = ObserveSignInAsync(_browserSignIn);
+    }
+    private async Task ObserveSignInAsync(CancellationTokenSource attempt)
+    {
+        try { await SignInAsync(attempt.Token); }
+        catch (Exception)
+        {
+            if (Authentication.Status != "error")
+                BrowserSignInStateChanged(this, new("error", "sign-in-failed"));
+        }
+        finally
+        {
+            _browserSignIn = null;
+            attempt.Dispose();
+        }
+    }
 
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
         ExecuteAsync(async token =>
@@ -61,7 +99,11 @@ public sealed class CommerceCoordinator : IDisposable
         ExecuteAsync(async token =>
         {
             var session = await _accounts.SignInAsync(token);
-            var catalog = await _catalogs.GetCatalogAsync(token);
+            SetState(State with { Status = CommerceStatus.Ready, Account = session });
+            var catalog = State.Catalog;
+            try { catalog = await _catalogs.GetCatalogAsync(token); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+            catch { /* Catalog availability must not discard the authenticated session. */ }
             await TryRefreshFeatureAccessAsync(token);
             SetState(new CommerceState(CommerceStatus.Ready, session, catalog));
         }, cancellationToken);
@@ -175,6 +217,8 @@ public sealed class CommerceCoordinator : IDisposable
         }
 
         _disposed = true;
+        if (_accounts is IBrowserSignIn browser)
+            browser.SignInStateChanged -= BrowserSignInStateChanged;
         _lifetime.Cancel();
     }
 }

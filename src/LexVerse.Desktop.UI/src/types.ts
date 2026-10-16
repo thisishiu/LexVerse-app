@@ -11,6 +11,9 @@ export type CommandType =
   | "settings.update"
   | "privacy.updateConsent"
   | "account.signIn"
+  | "account.reopenSignIn"
+  | "account.copySignInLink"
+  | "account.cancelSignIn"
   | "account.signOut"
   | "commerce.checkout"
   | "commerce.restore"
@@ -94,6 +97,7 @@ export interface DesktopSnapshot {
     configured: boolean;
     status: string;
     displayName?: string;
+    authentication?: { status: string; error?: string };
     offers: OfferSnapshot[];
   };
 }

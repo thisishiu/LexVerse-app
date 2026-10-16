@@ -261,7 +261,20 @@ public partial class MainWindow
             }
 
             case "account.signIn":
-                await RunCommerceOperationAsync(_commerce.SignInAsync, "Opening secure sign-in in your browser...");
+                _commerce.BeginSignIn();
+                return null;
+
+            case "account.reopenSignIn":
+                _commerce.ReopenSignIn();
+                return null;
+
+            case "account.copySignInLink":
+                if (_commerce.PendingAuthorizationUri is { } authorizationUri)
+                    Clipboard.SetText(authorizationUri.AbsoluteUri);
+                return null;
+
+            case "account.cancelSignIn":
+                _commerce.CancelSignIn();
                 return null;
 
             case "account.signOut":
@@ -485,6 +498,7 @@ public partial class MainWindow
                 },
 
                 displayName = commerce.Account?.DisplayName,
+                authentication = _commerce.Authentication,
                 offers
             }
         };

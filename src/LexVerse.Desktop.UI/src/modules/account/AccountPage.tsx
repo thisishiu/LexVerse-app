@@ -31,6 +31,12 @@ export function AccountPage({ app }: RouteProps) {
   const checkoutOpen = commerce?.status.toUpperCase() === "CHECKOUT";
   const serviceError = commerce?.status.toUpperCase() === "RETRY";
   const disabled = Boolean(busy);
+  const authentication = commerce?.authentication;
+  const authenticating = ["opening", "waiting", "completing"].includes(authentication?.status ?? "");
+  const canRecoverSignIn = authentication?.status === "waiting";
+  const authenticationLabel = authentication?.status === "opening" ? t("Opening browser", "Đang mở trình duyệt")
+    : authentication?.status === "completing" ? t("Completing sign-in", "Đang hoàn tất đăng nhập")
+    : t("Waiting for sign-in", "Đang chờ đăng nhập");
 
   return (
     <section className="page account-page">
@@ -42,7 +48,7 @@ export function AccountPage({ app }: RouteProps) {
         </div>
         <span className={`status-badge ${signedIn ? "status-success" : configured ? "status-neutral" : "status-warning"}`}>
           <span />
-          {commerce?.status ?? t("Loading", "Đang tải")}
+          {authenticating ? authenticationLabel : commerce?.status ?? t("Loading", "Đang tải")}
         </span>
       </header>
 
@@ -75,7 +81,7 @@ export function AccountPage({ app }: RouteProps) {
               </dl>
 
               <div className="button-row account-actions">
-                {!signedIn ? (
+                {!signedIn && !authenticating ? (
                   <button
                     className="button button-primary"
                     disabled={disabled}
@@ -83,7 +89,7 @@ export function AccountPage({ app }: RouteProps) {
                   >
                     <LogIn size={17} /> {t("Sign in or create account", "Đăng nhập hoặc tạo tài khoản")} <ExternalLink size={14} />
                   </button>
-                ) : (
+                ) : signedIn ? (
                   <button
                     className="button button-secondary"
                     disabled={disabled}
@@ -91,8 +97,8 @@ export function AccountPage({ app }: RouteProps) {
                   >
                     <LogOut size={17} /> {t("Sign out", "Đăng xuất")}
                   </button>
-                )}
-                {serviceError && !signedIn && (
+                ) : null}
+                {serviceError && !signedIn && !authenticating && (
                   <button
                     className="button button-secondary"
                     disabled={disabled}
@@ -102,6 +108,22 @@ export function AccountPage({ app }: RouteProps) {
                   </button>
                 )}
               </div>
+              {authenticating && (
+                <div className="inline-notice notice-info" role="status">
+                  <div>
+                    <p>{authentication?.status === "completing"
+                      ? t("Completing sign-in…", "Đang hoàn tất đăng nhập…")
+                      : t("Complete sign-in in your browser. LexVerse will update automatically. You have 15 minutes.", "Hoàn tất đăng nhập trên trình duyệt. LexVerse sẽ tự cập nhật. Bạn có 15 phút.")}</p>
+                    {authentication?.error && <p role="alert">{t("Could not open the browser. Reopen it or copy the link.", "Chưa mở được trình duyệt. Hãy mở lại hoặc sao chép liên kết.")}</p>}
+                    <div className="button-row">
+                      <button className="button button-secondary" disabled={disabled || !canRecoverSignIn} onClick={() => void run(t("Opening browser", "Đang mở trình duyệt"), () => bridge.command("account.reopenSignIn"))}>{t("Reopen browser", "Mở lại trình duyệt")}</button>
+                      <button className="button button-secondary" disabled={disabled || !canRecoverSignIn} onClick={() => void run(t("Copying link", "Đang sao chép liên kết"), () => bridge.command("account.copySignInLink"))}>{t("Copy link", "Sao chép liên kết")}</button>
+                      <button className="button button-quiet" disabled={disabled} onClick={() => void run(t("Canceling sign-in", "Đang hủy đăng nhập"), () => bridge.command("account.cancelSignIn"))}>{t("Cancel", "Hủy")}</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {authentication?.status === "error" && <p role="alert">{t("Sign-in did not complete, was canceled or expired. Please try again.", "Đăng nhập chưa hoàn tất, đã hủy hoặc hết hạn. Hãy thử lại.")}</p>}
             </>
           ) : (
             <div className="empty-state compact-empty">

@@ -1,7 +1,7 @@
 import { DesktopBridge } from "./bridge";
 
 describe("DesktopBridge", () => {
-  it("waits for browser sign-in beyond the normal timeout but keeps a deadline", async () => {
+  it("acknowledges browser sign-in promptly and uses the normal command deadline", async () => {
     vi.useFakeTimers();
     const previousChrome = window.chrome;
     let receive: ((event: { data: unknown }) => void) | undefined;
@@ -14,13 +14,13 @@ describe("DesktopBridge", () => {
     const bridge = new DesktopBridge();
     try {
       const signIn = bridge.command("account.signIn");
-      await vi.advanceTimersByTimeAsync(31_000);
+      await vi.advanceTimersByTimeAsync(100);
       const command = transport.postMessage.mock.calls[0][0];
       receive!({ data: { version: 1, id: command.id, ok: true, payload: null } });
       await expect(signIn).resolves.toBeNull();
 
       const timedOutSignIn = expect(bridge.command("account.signIn")).rejects.toThrow("bridge-timeout");
-      await vi.advanceTimersByTimeAsync(300_000);
+      await vi.advanceTimersByTimeAsync(30_000);
       await timedOutSignIn;
 
       const normalCommand = expect(bridge.command("app.getSnapshot")).rejects.toThrow("bridge-timeout");
