@@ -200,7 +200,7 @@ public sealed class AppCompositionRoot : IDisposable
         HttpClient httpClient,
         IExternalUriLauncher launcher)
     {
-        var authorization = GetAbsoluteUri("LEXVERSE_OAUTH_AUTHORIZATION_ENDPOINT");
+        var authorization = GetAbsoluteUri("LEXVERSE_OAUTH_DESKTOP_REQUEST_ENDPOINT");
         var token = GetAbsoluteUri("LEXVERSE_OAUTH_TOKEN_ENDPOINT");
         var account = GetAbsoluteUri("LEXVERSE_ACCOUNT_ENDPOINT");
         var clientId = Environment.GetEnvironmentVariable("LEXVERSE_OAUTH_CLIENT_ID");

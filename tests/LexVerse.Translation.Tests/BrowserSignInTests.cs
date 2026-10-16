@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Sockets;
 using LexVerse.Application.Account;
 using LexVerse.Application.Commerce;
 using LexVerse.Application.Product;
@@ -16,11 +15,8 @@ public sealed class BrowserSignInTests
     [InlineData("token")]
     [InlineData("profile")]
     [InlineData("store")]
-    [InlineData("timeout")]
-    public async Task ManualLinkSurvivesLauncherFailureAndUnrelatedCallbacks(string? failure)
+    public async Task HttpsPollingPreservesManualLinkAndPersistsOnlyOnSuccess(string? failure)
     {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        deadline.CancelAfter(TimeSpan.FromSeconds(25));
         var directory = Path.Combine(Path.GetTempPath(), $"lexverse-browser-{Guid.NewGuid():N}");
         try
         {
@@ -29,64 +25,28 @@ public sealed class BrowserSignInTests
             using var http = new HttpClient(new IdentityHandler(failure));
             var launcher = new BrokenLauncher();
             using var provider = new OAuthPkceAccountSessionProvider(http, Options(), store, launcher);
-            var pending = provider.SignInAsync(deadline.Token);
+            var pending = provider.SignInAsync(TestContext.Current.CancellationToken);
             var authorization = provider.PendingAuthorizationUri!;
+            Assert.Equal("https", authorization.Scheme);
+            Assert.DoesNotContain("redirect_uri", authorization.Query);
             Assert.Equal("browser-open-failed", provider.SignInState.Error);
             provider.ReopenBrowser();
             Assert.Equal(authorization, provider.PendingAuthorizationUri);
             Assert.Equal(2, launcher.Calls);
-            var parameters = Query(authorization);
-            var callback = parameters["redirect_uri"];
-            using var browser = new HttpClient();
-            // A probe and an error callback without the correct state cannot end sign-in.
-            try { using var probe = await browser.GetAsync(new Uri(new Uri(callback), "/favicon.ico"), deadline.Token); }
-            catch (HttpRequestException) { }
-            using var wrongState = await browser.GetAsync(callback + "?error=access_denied&state=wrong", deadline.Token);
-            Assert.Equal(HttpStatusCode.BadRequest, wrongState.StatusCode);
-            Assert.False(pending.IsCompleted);
-            using var response = await browser.GetAsync(callback + "?code=test-code&state=" + parameters["state"], deadline.Token);
-            var page = await response.Content.ReadAsStringAsync(deadline.Token);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => provider.SignInAsync(TestContext.Current.CancellationToken));
             if (failure is not null)
             {
                 await Assert.ThrowsAnyAsync<Exception>(() => pending);
-                Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-                Assert.DoesNotContain("Đã đăng nhập LexVerse", page);
-                Assert.Null(await provider.GetSessionAsync(deadline.Token));
+                Assert.Null(await provider.GetSessionAsync(TestContext.Current.CancellationToken));
                 Assert.Equal("error", provider.SignInState.Status);
             }
             else
             {
                 Assert.Equal("reader", (await pending).SubjectId);
-                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-                Assert.Contains("Đã đăng nhập LexVerse", page);
-                Assert.NotNull(await provider.GetSessionAsync(deadline.Token));
+                Assert.NotNull(await provider.GetSessionAsync(TestContext.Current.CancellationToken));
                 Assert.Equal("success", provider.SignInState.Status);
             }
             Assert.Null(provider.PendingAuthorizationUri);
-        }
-        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
-    }
-
-    [Fact]
-    public async Task StalledLocalConnectionDoesNotConsumeTheValidCallback()
-    {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        deadline.CancelAfter(TimeSpan.FromSeconds(20));
-        var directory = Path.Combine(Path.GetTempPath(), $"lexverse-stalled-{Guid.NewGuid():N}");
-        try
-        {
-            using var http = new HttpClient(new IdentityHandler(null));
-            using var provider = new OAuthPkceAccountSessionProvider(http, Options(),
-                new WindowsDpapiAccountStore(Path.Combine(directory, "session.dat")), new BrokenLauncher());
-            var pending = provider.SignInAsync(deadline.Token);
-            var parameters = Query(provider.PendingAuthorizationUri!);
-            var callback = new Uri(parameters["redirect_uri"]);
-            using var stalled = new TcpClient();
-            await stalled.ConnectAsync(callback.Host, callback.Port, deadline.Token);
-            using var browser = new HttpClient();
-            using var response = await browser.GetAsync(callback + "?code=test-code&state=" + parameters["state"], deadline.Token);
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-            Assert.Equal("reader", (await pending).SubjectId);
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
     }
@@ -112,7 +72,7 @@ public sealed class BrowserSignInTests
     public async Task PendingSignInSurvivesThreeMinutesAndExpiresAtFifteen()
     {
         var clock = new ManualClock();
-        using var http = new HttpClient(new IdentityHandler(null));
+        using var http = new HttpClient(new IdentityHandler("pending"));
         using var provider = new OAuthPkceAccountSessionProvider(http, Options(),
             new WindowsDpapiAccountStore(Path.Combine(Path.GetTempPath(), $"unused-{Guid.NewGuid():N}.dat")), new BrokenLauncher(), clock);
         var pending = provider.SignInAsync(TestContext.Current.CancellationToken);
@@ -143,6 +103,77 @@ public sealed class BrowserSignInTests
         Assert.Equal(1, accounts.Calls);
     }
 
+    [Theory]
+    [InlineData("slow_down")]
+    [InlineData("network")]
+    [InlineData("timeout")]
+    [InlineData("pending")]
+    [InlineData("expired_token")]
+    public async Task PollingBacksOffOrStopsWithoutLosingTheBrowserRequest(string firstResult)
+    {
+        var clock = new ManualClock();
+        var handler = new PollHandler(firstResult);
+        var directory = Path.Combine(Path.GetTempPath(), $"lexverse-poll-{Guid.NewGuid():N}");
+        try
+        {
+            using var http = new HttpClient(handler);
+            using var provider = new OAuthPkceAccountSessionProvider(http, Options(),
+                new WindowsDpapiAccountStore(Path.Combine(directory, "session.dat")), new BrokenLauncher(), clock);
+            var pending = provider.SignInAsync(TestContext.Current.CancellationToken);
+            var uri = provider.PendingAuthorizationUri;
+            clock.Advance(TimeSpan.FromSeconds(3));
+            await WaitUntilAsync(() => handler.Polls == 1);
+            if (firstResult == "expired_token")
+            {
+                await Assert.ThrowsAsync<InvalidOperationException>(() => pending);
+                Assert.Null(provider.PendingAuthorizationUri);
+                return;
+            }
+            // Give the poll continuation time to install the next timer.
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+            Assert.Equal(uri, provider.PendingAuthorizationUri);
+            if (firstResult != "pending")
+            {
+                clock.Advance(TimeSpan.FromSeconds(7));
+                Assert.Equal(1, handler.Polls);
+                clock.Advance(TimeSpan.FromSeconds(1));
+            }
+            else clock.Advance(TimeSpan.FromSeconds(3));
+            Assert.Equal("reader", (await pending.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)).SubjectId);
+            Assert.Equal(2, handler.Polls);
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        for (var i = 0; i < 100 && !condition(); i++)
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        Assert.True(condition());
+    }
+
+    private sealed class PollHandler(string firstResult) : HttpMessageHandler
+    {
+        public int Polls;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri!.AbsolutePath != "/authorize/token")
+                return await new IdentityHandler(null).RespondAsync(request, cancellationToken);
+            if (Interlocked.Increment(ref Polls) == 1)
+            {
+                if (firstResult == "network") throw new HttpRequestException("Network unavailable");
+                if (firstResult == "timeout")
+                {
+                    // Simulate an HTTP transport timeout without cancelling sign-in.
+                    throw new TaskCanceledException("HTTP timeout");
+                }
+                return new(HttpStatusCode.BadRequest) { Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new {
+                    error = firstResult == "pending" ? "authorization_pending" : firstResult })) };
+            }
+            return await new IdentityHandler(null).RespondAsync(request, cancellationToken);
+        }
+    }
+
     [Fact]
     public async Task CatalogFailureDoesNotDiscardSignedInAccount()
     {
@@ -154,8 +185,6 @@ public sealed class BrowserSignInTests
 
     private static OAuthNativeAppOptions Options() => new(new Uri("https://identity.example.test/authorize"),
         new Uri("https://identity.example.test/token"), new Uri("https://identity.example.test/me"), "lexverse-desktop");
-    private static Dictionary<string, string> Query(Uri uri) => uri.Query.TrimStart('?').Split('&')
-        .Select(pair => pair.Split('=', 2)).ToDictionary(pair => Uri.UnescapeDataString(pair[0]), pair => Uri.UnescapeDataString(pair[1]));
     private sealed class BrokenLauncher : IExternalUriLauncher
     {
         public int Calls { get; private set; }
@@ -163,17 +192,20 @@ public sealed class BrowserSignInTests
     }
     private sealed class IdentityHandler(string? failure) : HttpMessageHandler
     {
+        public Task<HttpResponseMessage> RespondAsync(HttpRequestMessage request, CancellationToken cancellationToken) => SendAsync(request, cancellationToken);
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            if (failure == "timeout")
+            await Task.CompletedTask;
+            if (request.RequestUri!.AbsolutePath == "/authorize")
+                return new(HttpStatusCode.OK) { Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new {
+                    request_secret = new string('s', 43), verification_uri = "https://identity.example.test/browser?request=" + Guid.NewGuid(),
+                    expires_in = 900, interval = 3 })) };
+            if (failure == "pending" && request.RequestUri.AbsolutePath == "/authorize/token")
+                return new(HttpStatusCode.BadRequest) { Content = new StringContent("""{"error":"authorization_pending"}""") };
+            return new HttpResponseMessage((failure == "token" && request.RequestUri.AbsolutePath == "/authorize/token") ||
+                (failure == "profile" && request.RequestUri.AbsolutePath == "/me") ? HttpStatusCode.BadRequest : HttpStatusCode.OK)
             {
-                await Task.Delay(TimeSpan.FromSeconds(6), cancellationToken);
-                throw new OperationCanceledException("Simulated HTTP timeout");
-            }
-            return new HttpResponseMessage((failure == "token" && request.RequestUri!.AbsolutePath == "/token") ||
-                (failure == "profile" && request.RequestUri!.AbsolutePath == "/me") ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK)
-            {
-                Content = new StringContent(request.RequestUri!.AbsolutePath == "/token"
+                Content = new StringContent(failure == "token" ? """{"error":"invalid_grant"}""" : request.RequestUri.AbsolutePath == "/authorize/token"
                     ? """{"access_token":"secret","refresh_token":"refresh","token_type":"Bearer","expires_in":3600}"""
                     : """{"subjectId":"reader","displayName":"Reader"}""")
             };

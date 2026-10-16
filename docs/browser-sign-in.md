@@ -1,29 +1,13 @@
 # Browser sign-in
 
-The desktop app uses the system browser, PKCE S256 and a temporary loopback listener. Tokens remain in the DPAPI account store; authorization URLs are only exposed to the native clipboard command, never in snapshots.
+The desktop creates a 15-minute HTTPS sign-in request with PKCE S256, opens its verification URL, and polls for tokens every three seconds. No loopback listener, callback URL, or custom URI registration is used. The browser requires explicit account confirmation and finishes on the server's success page.
 
-`account.signIn` acknowledges the start immediately. Snapshots publish `commerce.authentication` with `status` (`idle`, `opening`, `waiting`, `completing`, `success`, `error`) and an optional sanitized `error` code. `account.reopenSignIn`, `account.copySignInLink` and `account.cancelSignIn` recover or cancel the same pending attempt. Repeated starts do not create competing attempts.
+Configure `LEXVERSE_OAUTH_DESKTOP_REQUEST_ENDPOINT=https://lexverse.world/oauth/desktop/requests`. Keep the existing `/oauth/token` refresh endpoint, account endpoint and client ID. DPAPI storage and token refresh are unchanged.
 
-The app and server wait up to 15 minutes. Registration creates an unverified browser session; email verification still requires a POST. Verified users automatically return through `/oauth/continue`. The waiting tab polls even in the background, including when verification occurs in a different browser. Browser timer throttling can delay that check.
+Opening the browser again reuses the same request. Cancel stops polling locally; the server record expires automatically. Network failures and HTTP timeouts retry with increased delay; `slow_down` adds five seconds, up to 60 seconds. Invalid or expired requests require a new sign-in.
 
-Deploy the server first, then distribute the app. The server retains POST `/oauth/continue` for already-open consent forms. No account migration is needed.
+Deploy the server first, then release the new app immediately. Old `/oauth/authorize` and authorization-code exchange return an update-required response. Existing refresh tokens remain valid. Sessions already waiting on the old callback must restart in the updated app.
 
-Explicit desktop sign-in sends `prompt=login`. The server validates the authorization request, replaces the browser session and shows the login form so signing out in the app cannot silently sign back into the old browser account. Registration and email verification within that attempt still complete automatically. Requests without `prompt` retain the existing browser-session behavior for compatibility. Both server and app must be updated for this behavior.
+## Browser acceptance
 
-## Validation
-
-- Server: `rtk npm test` in `lexverse-server`.
-- Provider and coordinator: `rtk dotnet test tests/LexVerse.Translation.Tests --no-restore`.
-- UI: `rtk npm run check`. If Windows fork workers cannot start, use `rtk proxy npx vitest run --pool=threads --maxWorkers=1` after the TypeScript check.
-- App: `rtk dotnet build src/LexVerse.App --no-restore`. Use an isolated `OutDir` if a running app locks the default output.
-
-## Installed Windows acceptance
-
-These checks require the new server and the newly installed app; automated loopback tests do not replace them.
-
-1. Sign in with and without an existing browser session; verify that the app updates without another connection button.
-2. Register and verify email in the same browser, then in a different browser with the original waiting tab in the background. No second password entry should be needed.
-3. Wait over three minutes before completion; retry after expiry at fifteen minutes.
-4. Exercise reopen, copy-link, cancellation, and repeated clicks. Cancel and start again; an old tab must not sign in the new attempt.
-5. Check browser-launch failure and network failure recovery. The browser must not announce success unless the app has saved the session.
-6. Check that unavailable plan information does not discard a successful sign-in.
+Use the system Chrome browser against the new server: sign in, verify email if needed, confirm the displayed account once, and see the success page. Check that the app receives the account, no navigation targets localhost, and Console contains no form-action error. Repeat with wrong password, reopening the browser, cancellation, expired requests, and account switching by signing out of the website first.

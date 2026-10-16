@@ -8,24 +8,26 @@ Thiếu hoặc sai cấu hình đưa app về explicit free mode; Popup và Docu
 
 ## Đăng nhập native bằng OAuth
 
-`OAuthPkceAccountSessionProvider` dùng Authorization Code với PKCE `S256` cho public native client:
+`OAuthPkceAccountSessionProvider` dùng trình duyệt hệ thống và polling HTTPS với PKCE S256:
 
-1. Tạo verifier/state ngẫu nhiên 32 byte.
-2. Bind cổng IPv4 loopback tạm thời và callback `http://127.0.0.1:{port}/oauth/callback/`.
-3. Mở authorization endpoint HTTPS trong system browser.
-4. Nhận một bounded callback, kiểm tra exact path và state bằng constant-time comparison.
-5. Exchange code với verifier rồi lấy profile bằng bearer access token.
+1. Tạo verifier ngẫu nhiên 32 byte và gửi challenge S256 tới `POST /oauth/desktop/requests`.
+2. Giữ `request_secret` trong bộ nhớ, mở `verification_uri` trong trình duyệt.
+3. Người dùng đăng nhập, xác minh email và xác nhận tài khoản bằng nút kết nối.
+4. Poll endpoint tạo yêu cầu + `/token` mỗi 3 giây, gửi secret và verifier; tăng chờ khi `slow_down`, 429 hoặc lỗi mạng tạm thời.
+5. Nhận token một lần, lấy profile và lưu DPAPI. Hủy hoặc hết hạn 15 phút sẽ dừng polling.
+
+Không mở TCP listener, không dùng callback localhost và không cần đăng ký giao thức Windows.
 
 Access token được refresh trước expiry một phút. Refresh token và profile tối thiểu được mã hóa bằng Windows DPAPI cho current user và lưu atomically tại `%LOCALAPPDATA%\LexVerse\Account\session.dat`. Sign-out xóa store và invalidate paid access trong bộ nhớ ngay lập tức.
 
 Biến môi trường:
 
-- `LEXVERSE_OAUTH_AUTHORIZATION_ENDPOINT`
+- `LEXVERSE_OAUTH_DESKTOP_REQUEST_ENDPOINT`
 - `LEXVERSE_OAUTH_TOKEN_ENDPOINT`
 - `LEXVERSE_ACCOUNT_ENDPOINT`
 - `LEXVERSE_OAUTH_CLIENT_ID`
 
-Endpoint phải là absolute HTTPS URI không chứa credential. Server phải đăng ký LexVerse là public native client, cho phép loopback callback với port tạm thời, bắt buộc PKCE và không yêu cầu desktop client secret.
+Endpoint phải là absolute HTTPS URI không chứa credential. Đặt `LEXVERSE_OAUTH_DESKTOP_REQUEST_ENDPOINT=https://lexverse.world/oauth/desktop/requests`; endpoint refresh vẫn là `/oauth/token`. Không có client secret cố định trong desktop. Server trả URL trình duyệt cùng origin với endpoint tạo yêu cầu.
 
 Token response dùng field chuẩn:
 

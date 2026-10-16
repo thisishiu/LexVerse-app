@@ -90,7 +90,7 @@ public sealed class CommerceTests
     }
 
     [Fact]
-    public async Task OAuthPkce_UsesS256LoopbackAndPersistsOnlyDpapiCiphertext()
+    public async Task OAuthPkce_UsesS256HttpsPollingAndPersistsOnlyDpapiCiphertext()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var directory = Path.Combine(Path.GetTempPath(), $"lexverse-oauth-{Guid.NewGuid():N}");
@@ -112,20 +112,12 @@ public sealed class CommerceTests
         var session = await provider.SignInAsync(cancellationToken);
 
         Assert.Equal("customer-1", session.SubjectId);
-        Assert.DoesNotContain("scope", launcher.Parameters.Keys);
-        Assert.Equal("code", launcher.Parameters["response_type"]);
-        Assert.Equal("login", launcher.Parameters["prompt"]);
-        Assert.Equal("lexverse-desktop", launcher.Parameters["client_id"]);
-        var redirectUri = new Uri(launcher.Parameters["redirect_uri"]);
-        Assert.Equal("http", redirectUri.Scheme);
-        Assert.Equal("127.0.0.1", redirectUri.Host);
-        Assert.Equal("/oauth/callback/", redirectUri.AbsolutePath);
-        Assert.True(redirectUri.Port > 0);
-        Assert.False(string.IsNullOrWhiteSpace(launcher.Parameters["state"]));
-        Assert.Equal("S256", launcher.Parameters["code_challenge_method"]);
-        Assert.Equal(launcher.Parameters["code_challenge"], PkceChallenge(handler.CodeVerifier));
+        Assert.Equal("browser-code", launcher.Parameters["request"]);
+        Assert.Equal("S256", handler.CreateForm["code_challenge_method"]);
+        Assert.Equal(handler.CreateForm["code_challenge"], PkceChallenge(handler.CodeVerifier));
+        Assert.DoesNotContain("redirect_uri", handler.CreateForm.Keys);
         Assert.DoesNotContain("client_secret", handler.TokenForm.Keys);
-        Assert.Equal("authorization_code", handler.TokenForm["grant_type"]);
+        Assert.DoesNotContain("grant_type", handler.TokenForm.Keys);
         var storedBytes = await File.ReadAllBytesAsync(storePath, cancellationToken);
         Assert.DoesNotContain("access-token-secret", Encoding.UTF8.GetString(storedBytes));
         Assert.Equal("access-token-secret", await provider.GetAccessTokenAsync(cancellationToken));
@@ -163,7 +155,7 @@ public sealed class CommerceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var directory = Path.Combine(Path.GetTempPath(), $"lexverse-oauth-{Guid.NewGuid():N}");
         var launcher = new NoCallbackLauncher();
-        using var client = new HttpClient(new StaticHandler("{}"));
+        using var client = new HttpClient(new OAuthHandler());
         var provider = new OAuthPkceAccountSessionProvider(
             client,
             new OAuthNativeAppOptions(
@@ -267,16 +259,7 @@ public sealed class CommerceTests
         public void Open(Uri uri)
         {
             Parameters = ParseQuery(uri.Query);
-            var callback = new UriBuilder(Parameters["redirect_uri"])
-            {
-                Query = $"code=test-code&state={Uri.EscapeDataString(Parameters["state"])}"
-            }.Uri;
-            _ = Task.Run(async () =>
-            {
-                using var loopbackClient = new HttpClient();
-                using var response = await loopbackClient.GetAsync(callback);
-                _ = await response.Content.ReadAsStringAsync();
-            });
+
         }
     }
 
@@ -292,12 +275,18 @@ public sealed class CommerceTests
     {
         public Dictionary<string, string> TokenForm { get; private set; } = [];
         public string CodeVerifier => TokenForm["code_verifier"];
+        public Dictionary<string, string> CreateForm { get; private set; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
-            if (request.RequestUri?.AbsolutePath == "/token")
+            if (request.RequestUri?.AbsolutePath == "/authorize")
+            {
+                CreateForm = ParseQuery(await request.Content!.ReadAsStringAsync(cancellationToken));
+                return Json("""{"request_secret":"sssssssssssssssssssssssssssssssssssssssssss","verification_uri":"https://identity.example.test/browser?request=browser-code","expires_in":900,"interval":3}""");
+            }
+            if (request.RequestUri?.AbsolutePath == "/authorize/token")
             {
                 var form = await request.Content!.ReadAsStringAsync(cancellationToken);
                 TokenForm = ParseQuery(form);

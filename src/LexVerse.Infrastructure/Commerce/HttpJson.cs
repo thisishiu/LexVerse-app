@@ -15,17 +15,23 @@ internal static class HttpJson
             deadline.CancelAfter(timeout);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
             response.EnsureSuccessStatusCode();
+            return await ReadResponseBoundedAsync(response, maximumBytes, deadline.Token);
+        }
+    }
+
+    public static async Task<byte[]> ReadResponseBoundedAsync(HttpResponseMessage response, int maximumBytes, CancellationToken cancellationToken)
+    {
             if (response.Content.Headers.ContentLength is { } length && length > maximumBytes)
             {
                 throw new InvalidOperationException("The remote response is too large.");
             }
 
-            await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             using var output = new MemoryStream();
             var buffer = new byte[16 * 1024];
             while (true)
             {
-                var read = await stream.ReadAsync(buffer, deadline.Token);
+                var read = await stream.ReadAsync(buffer, cancellationToken);
                 if (read == 0)
                 {
                     return output.ToArray();
@@ -38,6 +44,5 @@ internal static class HttpJson
 
                 output.Write(buffer, 0, read);
             }
-        }
     }
 }
