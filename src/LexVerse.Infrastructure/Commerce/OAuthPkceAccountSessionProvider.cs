@@ -224,6 +224,8 @@ public sealed class OAuthPkceAccountSessionProvider : IAccountSessionProvider, I
         var query = new Dictionary<string, string>
         {
             ["response_type"] = "code",
+            ["prompt"] = "login",
+            ["prompt"] = "login",
             ["client_id"] = _options.ClientId,
             ["redirect_uri"] = redirectUri.AbsoluteUri,
             ["code_challenge"] = challenge,

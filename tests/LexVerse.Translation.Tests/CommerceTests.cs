@@ -114,6 +114,7 @@ public sealed class CommerceTests
         Assert.Equal("customer-1", session.SubjectId);
         Assert.DoesNotContain("scope", launcher.Parameters.Keys);
         Assert.Equal("code", launcher.Parameters["response_type"]);
+        Assert.Equal("login", launcher.Parameters["prompt"]);
         Assert.Equal("lexverse-desktop", launcher.Parameters["client_id"]);
         var redirectUri = new Uri(launcher.Parameters["redirect_uri"]);
         Assert.Equal("http", redirectUri.Scheme);

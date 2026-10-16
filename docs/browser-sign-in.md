@@ -8,6 +8,8 @@ The app and server wait up to 15 minutes. Registration creates an unverified bro
 
 Deploy the server first, then distribute the app. The server retains POST `/oauth/continue` for already-open consent forms. No account migration is needed.
 
+Explicit desktop sign-in sends `prompt=login`. The server validates the authorization request, replaces the browser session and shows the login form so signing out in the app cannot silently sign back into the old browser account. Registration and email verification within that attempt still complete automatically. Requests without `prompt` retain the existing browser-session behavior for compatibility. Both server and app must be updated for this behavior.
+
 ## Validation
 
 - Server: `rtk npm test` in `lexverse-server`.
