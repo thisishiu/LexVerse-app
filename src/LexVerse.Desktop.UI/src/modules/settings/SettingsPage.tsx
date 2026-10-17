@@ -57,7 +57,6 @@ const defaultSettings: DesktopSettings = {
   overlayOpacityPercent: 85,
   overlayFontScalePercent: 100,
   useDarkOverlayBlocks: true,
-  maxOcrFragments: 24,
   translationInstruction: "Translate naturally and clearly. Keep proper names, technical terms, HP/MP/EXP unchanged. Do not add explanations.",
   shortcuts: defaultShortcuts
 };
@@ -287,10 +286,6 @@ export function SettingsPage({ app }: RouteProps) {
               </div>
 
               <div className="settings-form-section realtime-options-grid">
-                <label className="number-setting">
-                  <span>{t("Maximum OCR fragments", "Số mảnh OCR tối đa")}</span>
-                  <input type="number" min={4} max={64} step={1} value={draft.maxOcrFragments} onChange={(event) => update("maxOcrFragments", Math.min(64, Math.max(4, event.target.valueAsNumber || 4)))} />
-                </label>
                 <div className="palette-setting">
                   <span>{t("Overlay palette", "Bảng màu lớp phủ")}</span>
                   <div className="segmented-control palette-segments" role="group" aria-label={t("Overlay palette", "Bảng màu lớp phủ")}>

@@ -401,6 +401,19 @@ public sealed class OcrTextBlockLayoutGrouper
             return true;
         }
 
+        // Geometry must agree before text-continuation bonuses can permit a merge.
+        var localLineHeight = Math.Min(previousLine.Bounds.Height, currentLine.Bounds.Height);
+        var alignmentTolerance = Math.Max(4, localLineHeight * 0.9);
+        if (verticalGap > Math.Max(4, localLineHeight * 0.75) ||
+            HorizontalOverlapRatio(previousLine.Bounds, currentLine.Bounds) < 0.55 ||
+            HorizontalOverlapRatio(currentBlockFirstLine.Bounds, currentLine.Bounds) < 0.55 ||
+            Math.Abs(currentLine.Bounds.X - currentBlockFirstLine.Bounds.X) > alignmentTolerance ||
+            !AreFontSizesSimilar(previousLine.FontSize, currentLine.FontSize) ||
+            !AreFontSizesSimilar(currentBlockFirstLine.FontSize, currentLine.FontSize))
+        {
+            return true;
+        }
+
         if (LooksLikeFormulaOrEquationLine(previousLine) || LooksLikeFormulaOrEquationLine(currentLine))
         {
             return true;
@@ -811,7 +824,7 @@ public sealed class OcrTextBlockLayoutGrouper
     private static double CalculateHorizontalSplitGap(IReadOnlyList<double> gaps, double medianFontSize)
     {
         var normalWordGaps = gaps
-            .Where(gap => gap <= Math.Max(24, medianFontSize * 2.4))
+            .Where(gap => gap <= Math.Max(12, medianFontSize * 1.2))
             .ToArray();
         var typicalWordGap = Median(normalWordGaps);
 
@@ -839,12 +852,7 @@ public sealed class OcrTextBlockLayoutGrouper
             return true;
         }
 
-        if (Math.Max(leftWordCount, rightWordCount) >= 4)
-        {
-            return gap >= Math.Max(42, medianFontSize * 2.6);
-        }
-
-        return gap >= Math.Max(72, medianFontSize * 4.5);
+        return gap >= Math.Max(22, medianFontSize * 1.8);
     }
 
     private static bool AreHorizontallyDetached(

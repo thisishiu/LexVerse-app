@@ -12,8 +12,6 @@ public sealed record RealtimeTranslationOptions(
 
     public int MaxTranslationBatchSize { get; init; } = 12;
 
-    public int MaxOcrFragments { get; init; } = 24;
-
     public TranslationPromptOptions TranslationPrompt { get; init; } = TranslationPromptOptions.Empty;
 
     public static RealtimeTranslationOptions Subtitle { get; } = new(

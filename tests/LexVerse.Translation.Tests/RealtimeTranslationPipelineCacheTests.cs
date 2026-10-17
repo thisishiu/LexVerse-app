@@ -11,6 +11,53 @@ namespace LexVerse.Translation.Tests;
 
 public sealed class RealtimeTranslationPipelineCacheTests
 {
+    [Theory]
+    [InlineData(OcrProcessingMode.FullScreen)]
+    [InlineData(OcrProcessingMode.Document)]
+    [InlineData(OcrProcessingMode.GameDialogue)]
+    [InlineData(OcrProcessingMode.Subtitle)]
+    [InlineData(OcrProcessingMode.Comic)]
+    public async Task WithManyBlocks_TranslatesEveryBlockAndCachesCompleteFrame(OcrProcessingMode mode)
+    {
+        const int expectedCount = 240;
+        var blocks = Enumerable.Range(0, expectedCount).Select(index =>
+        {
+            var bounds = new BoundingBox(1, index * 20, 100, 15);
+            var text = $"hello block {index}";
+            return new OcrTextBlock(text, bounds, [new OcrWord(text, bounds, 12)], 12);
+        }).ToArray();
+        var ocrService = new FakeOcrService(blocks);
+        var translator = new FakeTextTranslator();
+        var pipeline = new RealtimeTranslationPipeline(
+            new FakeCaptureSession(CreateFrame(200, expectedCount * 20), CreateFrame(200, expectedCount * 20)),
+            new ExactFrameChangeDetector(), ocrService, translator,
+            new InMemoryTranslationCache(),
+            RealtimeTranslationOptions.FullScreen with { Mode = mode });
+        var partials = new List<RealtimeTranslationPipelineResult>();
+        var result = await pipeline.CaptureRecognizeAndTranslateAsync(
+            TestContext.Current.CancellationToken,
+            (partial, _) => { partials.Add(partial); return Task.CompletedTask; });
+        var cached = await pipeline.CaptureRecognizeAndTranslateAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedCount, result.TranslatedBlocks.Count);
+        Assert.Equal(expectedCount, result.OverlayFrame.Items.Count);
+        Assert.Equal(expectedCount, translator.CallCount);
+        Assert.Contains(partials, partial => partial.TranslatedBlocks.Count == 16);
+        Assert.Equal(expectedCount, partials[^1].OverlayFrame.Items.Count);
+        Assert.Equal(Enumerable.Range(1, expectedCount / 16).Select(batch => batch * 16),
+            partials.Select(partial => partial.TranslatedBlocks.Count));
+        Assert.All(partials, partial => Assert.Equal(
+            blocks.Take(partial.TranslatedBlocks.Count).Select(block => block.Text),
+            partial.TranslatedBlocks.Select(block => block.SourceText)));
+        var lastText = $"hello block {expectedCount - 1}";
+        Assert.Contains(result.OverlayFrame.Items, item => item.SourceText == lastText);
+        Assert.Equal((expectedCount - 1) * 20, result.TranslatedBlocks[^1].Bounds.Y);
+        Assert.True(cached.UsedCachedTranslation);
+        Assert.Equal(1, ocrService.CallCount);
+        Assert.Equal(expectedCount, cached.OverlayFrame.Items.Count);
+        Assert.Contains(cached.OverlayFrame.Items, item => item.SourceText == lastText);
+    }
+
     [Fact]
     public async Task CaptureRecognizeAndTranslateAsync_WhenFrameRepeats_ReusesOcrAndTranslation()
     {
@@ -122,10 +169,8 @@ public sealed class RealtimeTranslationPipelineCacheTests
         Assert.Equal(2.75, result.OverlayFrame.RotationAngle);
     }
 
-    private static CapturedFrame CreateFrame()
+    private static CapturedFrame CreateFrame(int width = 16, int height = 8)
     {
-        var width = 16;
-        var height = 8;
         var stride = width * 4;
         var pixels = new byte[stride * height];
 

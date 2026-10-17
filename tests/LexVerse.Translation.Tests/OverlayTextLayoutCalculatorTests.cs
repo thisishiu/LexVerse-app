@@ -1,3 +1,4 @@
+using System.Windows;
 using LexVerse.Overlay;
 using Xunit;
 
@@ -5,60 +6,35 @@ namespace LexVerse.Translation.Tests;
 
 public sealed class OverlayTextLayoutCalculatorTests
 {
-    [Fact]
-    public void Calculate_LongTranslation_StaysWithinSourceRowAndAvailableWidth()
+    [Theory]
+    [InlineData("A long translation that cannot fit inside the original row", 180, 20, 420, 180)]
+    [InlineData("Short", 140, 24, 400, 140)]
+    [InlineData("Long translation", 6, 5, 90, 6)]
+    [InlineData("First line\nSecond line\nThird line", 36, 18, 90, 36)]
+    [InlineData("Near right edge", 180, 20, 12, 12)]
+    [InlineData("Outside", 180, 20, 0, 0)]
+    public void Calculate_PreservesSourceSizeAndFont(
+        string text, double width, double height, double availableWidth, double expectedWidth)
     {
         var layout = OverlayTextLayoutCalculator.Calculate(
-            "Tôi đang rất chật vật để trang trải cuộc sống và cần trao đổi thêm.",
-            sourceWidth: 180,
-            sourceHeight: 20,
-            maximumWidth: 420,
-            requestedFontSize: 20,
-            minimumFontSize: 8,
-            horizontalPadding: 4,
-            verticalPadding: 2,
-            pixelsPerDip: 1);
+            text, width, height, availableWidth, 20, 8, 4, 2, 1.25);
 
-        Assert.Equal(24, layout.Height);
-        Assert.InRange(layout.Width, 188, 420);
-        Assert.InRange(layout.FontSize, 8, 19.99);
+        Assert.Equal(expectedWidth, layout.Width);
+        Assert.Equal(height, layout.Height);
+        Assert.Equal(20, layout.FontSize);
     }
 
-    [Fact]
-    public void Calculate_ShortTranslation_PreservesRequestedFontSize()
+    [Theory]
+    [InlineData(10, 20, 30, 40, 10, 20, 30, 40)]
+    [InlineData(-5, -10, 30, 40, 0, 0, 25, 30)]
+    [InlineData(95, 90, 30, 40, 95, 90, 5, 10)]
+    [InlineData(110, 110, 30, 40, 0, 0, 0, 0)]
+    public void ClipToBounds_IntersectsWithoutMovingOrExpandingSource(
+        double x, double y, double width, double height,
+        double expectedX, double expectedY, double expectedWidth, double expectedHeight)
     {
-        var layout = OverlayTextLayoutCalculator.Calculate(
-            "Xin chào",
-            sourceWidth: 140,
-            sourceHeight: 24,
-            maximumWidth: 400,
-            requestedFontSize: 16,
-            minimumFontSize: 8,
-            horizontalPadding: 4,
-            verticalPadding: 2,
-            pixelsPerDip: 1);
+        var rect = OverlayTextLayoutCalculator.ClipToBounds(new Rect(x, y, width, height), 100, 100);
 
-        Assert.Equal(28, layout.Height);
-        Assert.Equal(148, layout.Width);
-        Assert.Equal(16, layout.FontSize);
-    }
-
-    [Fact]
-    public void Calculate_NarrowSource_CanExpandWithoutExceedingOverlayBounds()
-    {
-        var layout = OverlayTextLayoutCalculator.Calculate(
-            "Trưởng phòng",
-            sourceWidth: 36,
-            sourceHeight: 18,
-            maximumWidth: 90,
-            requestedFontSize: 16,
-            minimumFontSize: 8,
-            horizontalPadding: 4,
-            verticalPadding: 2,
-            pixelsPerDip: 1);
-
-        Assert.InRange(layout.Width, 44, 90);
-        Assert.Equal(22, layout.Height);
-        Assert.InRange(layout.FontSize, 8, 16);
+        Assert.Equal(new Rect(expectedX, expectedY, expectedWidth, expectedHeight), rect);
     }
 }

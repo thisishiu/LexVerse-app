@@ -39,8 +39,6 @@ public sealed record DesktopPreferences
 
     public bool UseDarkOverlayBlocks { get; init; } = true;
 
-    public int MaxOcrFragments { get; init; } = 24;
-
     public string TranslationInstruction { get; init; } = DefaultTranslationInstruction;
 
     public string PopupShortcut { get; init; } = "F6";
@@ -65,7 +63,6 @@ public sealed record DesktopPreferences
         ScanIntervalMs = Math.Clamp(ScanIntervalMs, 250, 2_000),
         OverlayOpacityPercent = Math.Clamp(OverlayOpacityPercent, 40, 100),
         OverlayFontScalePercent = Math.Clamp(OverlayFontScalePercent, 60, 180),
-        MaxOcrFragments = Math.Clamp(MaxOcrFragments, 4, 64),
         TranslationInstruction = NormalizeInstruction(TranslationInstruction),
         PopupShortcut = NormalizeShortcut(PopupShortcut, "F6"),
         RegionShortcut = NormalizeShortcut(RegionShortcut, "Ctrl+Shift+R"),

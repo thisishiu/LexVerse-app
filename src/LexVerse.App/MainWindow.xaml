@@ -11,12 +11,13 @@
         MinWidth="860"
         MinHeight="616"
         WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
         AutomationProperties.Name="LexVerse Control Center"
         SnapsToDevicePixels="True"
         UseLayoutRounding="True"
-        Background="{StaticResource BackgroundBrush}">
+        Background="White">
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="36" ResizeBorderThickness="6"
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="0"
                       GlassFrameThickness="0" CornerRadius="0"
                       UseAeroCaptionButtons="False" />
     </WindowChrome.WindowChrome>
@@ -70,10 +71,10 @@
     <Border x:Name="ChromeFrame">
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="36"/>
+                <RowDefinition x:Name="CaptionRow" Height="0"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-            <Grid Background="{StaticResource SurfaceBrush}">
+            <Grid x:Name="CaptionBar" Visibility="Collapsed" Background="{StaticResource SurfaceBrush}">
                 <TextBlock Text="LexVerse" Foreground="{StaticResource TextBrush}" FontSize="12"
                            Margin="14,0,150,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
@@ -114,20 +115,19 @@
                 </StackPanel>
             </Grid>
     <Grid Grid.Row="1">
-        <Border x:Name="StartupLoadingPanel" Background="{StaticResource BackgroundBrush}">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Border x:Name="StartupLoadingPanel" Background="White">
+            <StackPanel x:Name="StartupErrorContent" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <TextBlock Text="LexVerse" Foreground="{StaticResource TextBrush}"
                            FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                <TextBlock x:Name="StartupMessage" Text="Loading workspace..." TextWrapping="Wrap" MaxWidth="480" TextAlignment="Center" Foreground="{StaticResource MutedTextBrush}"
+                <TextBlock x:Name="StartupMessage" TextWrapping="Wrap" MaxWidth="480" TextAlignment="Center" Foreground="{StaticResource MutedTextBrush}"
                            Margin="0,12,0,16" HorizontalAlignment="Center"
                            AutomationProperties.LiveSetting="Polite"/>
-                <ProgressBar x:Name="StartupProgress" IsIndeterminate="True" Width="220" Height="4"
-                             AutomationProperties.Name="Loading workspace"/>
                 <Button x:Name="StartupCloseButton" Content="Close" Click="CloseStartup_Click" Visibility="Collapsed" Margin="0,16,0,0" Width="100"/>
             </StackPanel>
         </Border>
 
         <wv2:WebView2 x:Name="WebUi"
+                      DefaultBackgroundColor="White"
                       Visibility="Hidden"
                       AutomationProperties.Name="LexVerse web control center" />
     </Grid>

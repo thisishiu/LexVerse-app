@@ -36,7 +36,6 @@ const basePreview: DesktopSnapshot = {
     overlayOpacityPercent: 85,
     overlayFontScalePercent: 100,
     useDarkOverlayBlocks: true,
-    maxOcrFragments: 24,
     translationInstruction: "Translate naturally and clearly. Keep proper names, technical terms, HP/MP/EXP unchanged. Do not add explanations.",
     shortcuts: {
       popup: "F6",

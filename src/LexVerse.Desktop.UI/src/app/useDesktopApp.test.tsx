@@ -12,7 +12,7 @@ const snapshot: DesktopSnapshot = {
     closePopupOnOutsideClick: true, allowPopupDragging: true, showOcrDebugBoxes: false,
     showPopupBeforeTranslationFinishes: false, scanIntervalMs: 500,
     overlayOpacityPercent: 85, overlayFontScalePercent: 100, useDarkOverlayBlocks: true,
-    maxOcrFragments: 24, translationInstruction: "Translate naturally.",
+    translationInstruction: "Translate naturally.",
     shortcuts: { popup: "F6", region: "Ctrl+Shift+R", fullScreen: "Ctrl+Shift+F", stop: "Escape", reset: "Ctrl+Shift+Backspace" }
   },
   privacy: { allowRemoteTextProcessing: false, allowLocalDiagnostics: true },

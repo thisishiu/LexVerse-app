@@ -296,12 +296,7 @@ public sealed class WindowsOcrService : IOcrService
             return true;
         }
 
-        if (Math.Max(leftWordCount, rightWordCount) >= 4)
-        {
-            return gap >= Math.Max(42, medianWordHeight * 2.6);
-        }
-
-        return gap >= Math.Max(72, medianWordHeight * 4.5);
+        return gap >= Math.Max(22, medianWordHeight * 1.8);
     }
 
     private static OcrTextBlock ToTextBlock(IReadOnlyList<CoreOcrWord> words)
@@ -362,7 +357,7 @@ public sealed class WindowsOcrService : IOcrService
     private static double CalculateHorizontalSplitGap(IReadOnlyList<double> gaps, double medianWordHeight)
     {
         var normalWordGaps = gaps
-            .Where(gap => gap <= Math.Max(24, medianWordHeight * 2.4))
+            .Where(gap => gap <= Math.Max(12, medianWordHeight * 1.2))
             .ToArray();
         var typicalWordGap = Median(normalWordGaps);
 

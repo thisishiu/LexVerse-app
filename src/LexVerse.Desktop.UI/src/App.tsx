@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Activity, CircleAlert, Keyboard, LoaderCircle, X } from "lucide-react";
 import { routes, routeIds } from "./app/routes";
 import type { AppRoute } from "./app/route-types";
 import { useDesktopApp } from "./app/useDesktopApp";
+import { StartupIntro } from "./app/StartupIntro";
 import "./styles.css";
 
 function routeFromHash(): AppRoute {
@@ -27,6 +28,17 @@ function errorMessage(error: string, vietnamese: boolean) {
 
 export function App() {
   const app = useDesktopApp();
+  const [introActive, setIntroActive] = useState(() =>
+    Boolean(window.chrome?.webview) || new URLSearchParams(window.location.search).has("intro"));
+  const finishIntro = useCallback(() => {
+    if (!window.chrome?.webview) {
+      setIntroActive(false);
+      return;
+    }
+    void app.bridge.command("app.introCompleted")
+      .catch((reason: unknown) => app.setError(reason instanceof Error ? reason.message : "operation-failed"))
+      .finally(() => setIntroActive(false));
+  }, [app.bridge, app.setError]);
   const [route, setRoute] = useState<AppRoute>(routeFromHash);
   const Page = routes[route].component;
   const isVietnamese = app.snapshot?.settings.appLanguage === "vi";
@@ -45,7 +57,7 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.repeat || !app.snapshot || app.busy) return;
+      if (introActive || event.repeat || !app.snapshot || app.busy) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
       if (target?.closest("[data-shortcut-capture]") ||
           target?.matches("input, textarea, select, [contenteditable='true']")) return;
@@ -70,7 +82,7 @@ export function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [app.snapshot, app.busy, app.bridge]);
+  }, [app.snapshot, app.busy, app.bridge, introActive]);
 
   function navigate(next: AppRoute) {
     if (window.location.hash !== `#/${next}`) {
@@ -85,7 +97,9 @@ export function App() {
       : app.snapshot ? t("Desktop ready", "Desktop sẵn sàng") : t("Connecting", "Đang kết nối"));
 
   return (
-    <div className="app-shell">
+    <>
+    {introActive && <StartupIntro ready={Boolean(app.snapshot)} onComplete={finishIntro} />}
+    <div className="app-shell" inert={introActive}>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">Lx</div>
@@ -165,6 +179,7 @@ export function App() {
         </footer>
       </main>
     </div>
+    </>
   );
 }
 

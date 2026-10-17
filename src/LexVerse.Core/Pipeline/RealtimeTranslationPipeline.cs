@@ -170,7 +170,6 @@ public sealed class RealtimeTranslationPipeline
         using var emitGate = new SemaphoreSlim(1, 1);
 
         foreach (var (block, index) in batch.Blocks
-                     .Take(Math.Max(1, _options.MaxOcrFragments))
                      .Select((block, index) => (block, index))
                      .Where(item => !string.IsNullOrWhiteSpace(item.block.SourceText)))
         {

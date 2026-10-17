@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using LexVerse.Application.Desktop;
 
@@ -91,7 +92,14 @@ public sealed class PersistentDesktopPreferencesService : IDesktopPreferencesSer
                 return null;
             }
 
-            var wire = JsonSerializer.Deserialize<DesktopPreferencesWire>(File.ReadAllBytes(_path), JsonOptions);
+            var document = JsonNode.Parse(File.ReadAllBytes(_path));
+            // Retired settings must not invalidate the user's remaining preferences.
+            if (document is JsonObject root && root["preferences"] is JsonObject preferences)
+            {
+                preferences.Remove("maxOcrFragments");
+            }
+
+            var wire = document.Deserialize<DesktopPreferencesWire>(JsonOptions);
             return wire is { SchemaVersion: DesktopPreferences.CurrentSchemaVersion, Preferences: not null }
                 ? wire.Preferences
                 : null;

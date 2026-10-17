@@ -54,6 +54,8 @@ public partial class MainWindow : Window
         _privacyPreferences.Current.AllowRemoteTextProcessing && !IsRealtimeRunning;
     private bool _regionAccessAllowed;
     private bool _fullScreenAccessAllowed;
+    private DispatcherTimer? _featureAccessTimer;
+    private bool _refreshingFeatureAccess;
     private CancellationTokenSource? _popupCancellation;
     private HwndSource? _hwndSource;
     private bool _hotkeyRegistered;
@@ -107,6 +109,15 @@ public partial class MainWindow : Window
     {
         Loaded -= MainWindow_Loaded;
         _ = InitializeWebUiAsync();
+        // Re-evaluate cached decisions after transient startup/account failures.
+        // GetAccessAsync owns the network cache and retry interval.
+        _featureAccessTimer = new DispatcherTimer
+        {
+            Interval = FeatureAccessService.DefaultFailureRetryInterval
+        };
+        _featureAccessTimer.Tick += async (_, _) => await RefreshFeatureAccessAsync();
+        _featureAccessTimer.Start();
+        _ = RefreshFeatureAccessAsync();
         try
         {
             await _commerce.InitializeAsync();
@@ -146,7 +157,12 @@ public partial class MainWindow : Window
     }
 
     private void Commerce_StateChanged(object? sender, CommerceState state) =>
-        Dispatcher.BeginInvoke(() => PublishDesktopSnapshot());
+        Dispatcher.BeginInvoke(async () =>
+        {
+            PublishDesktopSnapshot();
+            if (state.Status != CommerceStatus.Loading)
+                await RefreshFeatureAccessAsync();
+        });
 
     private async Task RunCommerceOperationAsync(
         Func<CancellationToken, Task> operation,
@@ -171,11 +187,25 @@ public partial class MainWindow : Window
 
     private async Task RefreshFeatureAccessAsync()
     {
-        var region = await _featureAccessService.GetAccessAsync(ProductFeatures.RegionTranslation);
-        var fullScreen = await _featureAccessService.GetAccessAsync(ProductFeatures.FullScreenTranslation);
-        _regionAccessAllowed = region.IsAllowed;
-        _fullScreenAccessAllowed = fullScreen.IsAllowed;
-        PublishDesktopSnapshot();
+        if (_refreshingFeatureAccess || _cleanupStarted) return;
+        _refreshingFeatureAccess = true;
+        try
+        {
+            var token = _desktopUiLifetime?.Token ?? CancellationToken.None;
+            var region = await _featureAccessService.GetAccessAsync(ProductFeatures.RegionTranslation, token);
+            var fullScreen = await _featureAccessService.GetAccessAsync(ProductFeatures.FullScreenTranslation, token);
+            if (_cleanupStarted) return;
+            _regionAccessAllowed = region.IsAllowed;
+            _fullScreenAccessAllowed = fullScreen.IsAllowed;
+            PublishDesktopSnapshot();
+        }
+        catch (OperationCanceledException) when (_cleanupStarted || _desktopUiLifetime?.IsCancellationRequested == true)
+        {
+        }
+        finally
+        {
+            _refreshingFeatureAccess = false;
+        }
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -402,7 +432,6 @@ public partial class MainWindow : Window
             SourceLanguage = sourceLanguage,
             TargetLanguage = _targetLanguage,
             OcrInterval = TimeSpan.FromMilliseconds(preferences.ScanIntervalMs),
-            MaxOcrFragments = preferences.MaxOcrFragments,
             TranslationPrompt = CreatePromptOptions(preferences)
         };
     }
@@ -631,6 +660,7 @@ public partial class MainWindow : Window
         }
 
         _cleanupStarted = true;
+        _featureAccessTimer?.Stop();
         IsEnabled = false;
         _status = "Stopping background work…";
         try

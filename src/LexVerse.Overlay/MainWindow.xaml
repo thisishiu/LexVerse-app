@@ -12,20 +12,20 @@
         Topmost="True"
         ShowInTaskbar="False"
         ResizeMode="NoResize"
-        SnapsToDevicePixels="True"
-        UseLayoutRounding="True"
+        SnapsToDevicePixels="False"
+        UseLayoutRounding="False"
         Loaded="Window_Loaded"
         Height="600"
         Width="800">
 
-    <Grid>
+    <Grid ClipToBounds="True">
         <ItemsControl x:Name="OverlayItemsControl"
                       ItemsSource="{Binding Items}"
                       RenderTransformOrigin="0.5,0.5">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <Canvas IsHitTestVisible="False"
-                            SnapsToDevicePixels="True"/>
+                            SnapsToDevicePixels="False"/>
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>

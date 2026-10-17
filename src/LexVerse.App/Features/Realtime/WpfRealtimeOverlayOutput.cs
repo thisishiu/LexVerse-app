@@ -77,10 +77,13 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
     private TextItem CreateTextItem(OverlayTextItem item)
     {
         var window = _window ?? throw new InvalidOperationException("Overlay window is not initialized.");
-        var targetRect = window.ScreenPhysicalToLocalDip(item.TargetRect);
-        var x = Math.Max(0, targetRect.X - HorizontalPadding);
-        var y = Math.Max(0, targetRect.Y - VerticalPadding);
-        var maxWidth = Math.Max(24, window.ActualWidth - x);
+        var targetRect = OverlayTextLayoutCalculator.ClipToBounds(
+            window.ScreenPhysicalToLocalDip(item.TargetRect),
+            window.Width,
+            window.Height);
+        var x = targetRect.X;
+        var y = targetRect.Y;
+        var maxWidth = Math.Max(0, window.Width - x);
         var fontRect = window.ScreenPhysicalToLocalDip(
             new(0, 0, 1, Math.Max(1, item.FontSize)));
         var fontScale = _preferences.Current.OverlayFontScalePercent / 100d;
@@ -114,15 +117,18 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
     private TextItem CreateDebugItem(OverlayTextItem item)
     {
         var window = _window ?? throw new InvalidOperationException("Overlay window is not initialized.");
-        var rect = window.ScreenPhysicalToLocalDip(item.TargetRect);
+        var rect = OverlayTextLayoutCalculator.ClipToBounds(
+            window.ScreenPhysicalToLocalDip(item.TargetRect),
+            window.Width,
+            window.Height);
         return new TextItem
         {
             Text = string.Empty,
-            X = Math.Max(0, rect.X),
-            Y = Math.Max(0, rect.Y),
-            Width = Math.Max(2, rect.Width),
-            Height = Math.Max(2, rect.Height),
-            MinHeight = Math.Max(2, rect.Height),
+            X = rect.X,
+            Y = rect.Y,
+            Width = rect.Width,
+            Height = rect.Height,
+            MinHeight = rect.Height,
             FontSize = MinFontSize,
             Background = "Transparent",
             BorderBrush = "#FF7A00",

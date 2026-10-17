@@ -1,6 +1,7 @@
 export type CommandType =
   | "app.getSnapshot"
   | "app.uiReady"
+  | "app.introCompleted"
   | "translation.translateQuickText"
   | "translation.triggerSelectedText"
   | "realtime.selectRegion"
@@ -68,7 +69,6 @@ export interface DesktopSettings {
   overlayOpacityPercent: number;
   overlayFontScalePercent: number;
   useDarkOverlayBlocks: boolean;
-  maxOcrFragments: number;
   translationInstruction: string;
   shortcuts: DesktopShortcuts;
 }

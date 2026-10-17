@@ -75,6 +75,37 @@ public sealed class FeatureAccessServiceTests
     }
 
     [Fact]
+    public async Task GetAccess_RecoversRealtimeAccessAfterTransientStartupFailure()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var clock = new ManualTimeProvider(Now);
+        var provider = new RecoveringEntitlementProvider();
+        using var service = new FeatureAccessService(provider, clock);
+
+        Assert.False((await service.GetAccessAsync(ProductFeatures.RegionTranslation, token)).IsAllowed);
+        provider.Available = true;
+        clock.Advance(FeatureAccessService.DefaultFailureRetryInterval);
+
+        Assert.True((await service.GetAccessAsync(ProductFeatures.RegionTranslation, token)).IsAllowed);
+        Assert.True((await service.GetAccessAsync(ProductFeatures.FullScreenTranslation, token)).IsAllowed);
+        Assert.Equal(2, provider.CallCount);
+    }
+
+    private sealed class RecoveringEntitlementProvider : IEntitlementProvider
+    {
+        public bool Available { get; set; }
+        public int CallCount { get; private set; }
+
+        public Task<EntitlementSnapshot> GetEntitlementsAsync(CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Available
+                ? Task.FromResult(CreateSnapshot(ProductFeatures.RegionTranslation, ProductFeatures.FullScreenTranslation))
+                : Task.FromException<EntitlementSnapshot>(new InvalidOperationException("unavailable"));
+        }
+    }
+
+    [Fact]
     public async Task Refresh_PropagatesProviderFailureForRecoveryUx()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

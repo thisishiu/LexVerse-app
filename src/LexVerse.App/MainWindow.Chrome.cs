@@ -1,11 +1,28 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Shell;
 
 namespace LexVerse.App;
 
 public partial class MainWindow
 {
+    private bool _startupChromeRestored;
+
+    private void RestoreStartupChrome()
+    {
+        if (_startupChromeRestored) return;
+        _startupChromeRestored = true;
+        CaptionRow.Height = new GridLength(36);
+        CaptionBar.Visibility = Visibility.Visible;
+        ResizeMode = ResizeMode.CanResize;
+        var chrome = WindowChrome.GetWindowChrome(this);
+        chrome.CaptionHeight = 36;
+        chrome.ResizeBorderThickness = new Thickness(6);
+        Background = (Brush)FindResource("BackgroundBrush");
+        UpdateChromePadding();
+    }
+
     protected override void OnStateChanged(EventArgs e)
     {
         base.OnStateChanged(e);

@@ -59,7 +59,14 @@ public partial class MainWindow
                 "LexVerse",
                 "WebView2");
             Directory.CreateDirectory(userDataFolder);
-            var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
+            // Let the startup intro play its audio without requiring a click.
+            var environmentOptions = new CoreWebView2EnvironmentOptions
+            {
+                AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required"
+            };
+            var environment = await CoreWebView2Environment.CreateAsync(
+                userDataFolder: userDataFolder,
+                options: environmentOptions);
             token.ThrowIfCancellationRequested();
             await WebUi.EnsureCoreWebView2Async(environment);
             token.ThrowIfCancellationRequested();
@@ -97,8 +104,9 @@ public partial class MainWindow
         WebUi.Visibility = Visibility.Collapsed;
         StartupLoadingPanel.Visibility = Visibility.Visible;
         StartupMessage.Text = message;
-        StartupProgress.Visibility = Visibility.Collapsed;
+        StartupErrorContent.Visibility = Visibility.Visible;
         StartupCloseButton.Visibility = Visibility.Visible;
+        RestoreStartupChrome();
     }
 
     private void ConfigureWebViewSecurity(CoreWebView2 core)
@@ -208,6 +216,12 @@ public partial class MainWindow
                 _startupTimer?.Stop();
                 WebUi.Visibility = Visibility.Visible;
                 StartupLoadingPanel.Visibility = Visibility.Collapsed;
+                return null;
+
+            case "app.introCompleted":
+                if (!_desktopUiReady)
+                    throw new DesktopBridgePayloadException("workspace-not-ready");
+                RestoreStartupChrome();
                 return null;
 
             case "translation.translateQuickText":
@@ -364,7 +378,6 @@ public partial class MainWindow
             OverlayOpacityPercent = payload.OverlayOpacityPercent ?? current.OverlayOpacityPercent,
             OverlayFontScalePercent = payload.OverlayFontScalePercent ?? current.OverlayFontScalePercent,
             UseDarkOverlayBlocks = payload.UseDarkOverlayBlocks ?? current.UseDarkOverlayBlocks,
-            MaxOcrFragments = payload.MaxOcrFragments ?? current.MaxOcrFragments,
             TranslationInstruction = payload.TranslationInstruction ?? current.TranslationInstruction,
             PopupShortcut = shortcuts?.Popup ?? current.PopupShortcut,
             RegionShortcut = shortcuts?.Region ?? current.RegionShortcut,
@@ -459,7 +472,6 @@ public partial class MainWindow
                 overlayOpacityPercent = preferences.OverlayOpacityPercent,
                 overlayFontScalePercent = preferences.OverlayFontScalePercent,
                 useDarkOverlayBlocks = preferences.UseDarkOverlayBlocks,
-                maxOcrFragments = preferences.MaxOcrFragments,
                 translationInstruction = preferences.TranslationInstruction,
                 shortcuts = new
                 {
@@ -594,7 +606,6 @@ public partial class MainWindow
         int? OverlayOpacityPercent = null,
         int? OverlayFontScalePercent = null,
         bool? UseDarkOverlayBlocks = null,
-        int? MaxOcrFragments = null,
         string? TranslationInstruction = null,
         ShortcutPayload? Shortcuts = null);
 

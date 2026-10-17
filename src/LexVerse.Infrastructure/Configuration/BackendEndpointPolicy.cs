@@ -8,7 +8,7 @@ public static class BackendEndpointPolicy
 
     public static void LoadEnvironment()
     {
-        DotEnvFile.LoadNearest(".env.local");
+        // DotEnvFile.LoadNearest(".env.local");
         DotEnvFile.LoadNearest();
     }
 

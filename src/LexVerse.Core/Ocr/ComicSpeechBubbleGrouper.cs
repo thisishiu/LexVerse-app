@@ -4,11 +4,8 @@ namespace LexVerse.Core.Ocr;
 
 public sealed class ComicSpeechBubbleGrouper
 {
-    private const double MaximumVerticalGapFactor = 1.9;
-    private const double MinimumMaximumVerticalGap = 42;
-    private const double HorizontalOverlapThreshold = 0.14;
-    private const double CenterAlignmentFactor = 0.55;
-    private const double MinimumCenterAlignment = 86;
+    private const double MaximumVerticalGapFactor = 0.75;
+    private const double HorizontalOverlapThreshold = 0.55;
     private const double FontSimilarityThreshold = 0.72;
 
     public IReadOnlyList<OcrTextBlock> GroupLines(IEnumerable<OcrTextBlock> lineBlocks)
@@ -69,25 +66,25 @@ public sealed class ComicSpeechBubbleGrouper
             return 0;
         }
 
-        var maximumVerticalGap = Math.Max(MinimumMaximumVerticalGap, medianLineHeight * MaximumVerticalGapFactor);
+        var localLineHeight = Math.Min(previousLine.Bounds.Height, line.Bounds.Height);
+        var maximumVerticalGap = Math.Max(4, localLineHeight * MaximumVerticalGapFactor);
         if (verticalGap > maximumVerticalGap)
         {
             return 0;
         }
 
-        if (!AreFontSizesSimilar(previousLine.FontSize, line.FontSize))
+        if (!AreFontSizesSimilar(previousLine.FontSize, line.FontSize) ||
+            !AreFontSizesSimilar(cluster.Lines[0].FontSize, line.FontSize))
         {
             return 0;
         }
 
-        var centerDistance = Math.Abs(CenterX(cluster.Bounds) - CenterX(line.Bounds));
-        var centerLimit = Math.Max(
-            MinimumCenterAlignment,
-            Math.Max(cluster.Bounds.Width, line.Bounds.Width) * CenterAlignmentFactor);
-        var centerAligned = centerDistance <= centerLimit;
-        var overlapsCluster = HorizontalOverlapRatio(cluster.Bounds, line.Bounds) >= HorizontalOverlapThreshold;
+        var firstLine = cluster.Lines[0];
+        var centerLimit = Math.Max(4, localLineHeight * 0.9);
+        var centerAligned = Math.Abs(CenterX(firstLine.Bounds) - CenterX(line.Bounds)) <= centerLimit;
+        var overlapsFirst = HorizontalOverlapRatio(firstLine.Bounds, line.Bounds) >= HorizontalOverlapThreshold;
         var overlapsPrevious = HorizontalOverlapRatio(previousLine.Bounds, line.Bounds) >= HorizontalOverlapThreshold;
-        if (!centerAligned && !overlapsCluster && !overlapsPrevious)
+        if (!centerAligned || !overlapsFirst || !overlapsPrevious)
         {
             return 0;
         }
@@ -99,7 +96,7 @@ public sealed class ComicSpeechBubbleGrouper
             score += 0.2;
         }
 
-        if (overlapsCluster || overlapsPrevious)
+        if (overlapsFirst && overlapsPrevious)
         {
             score += 0.15;
         }

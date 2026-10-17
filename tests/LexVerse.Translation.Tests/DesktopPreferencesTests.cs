@@ -7,6 +7,38 @@ namespace LexVerse.Translation.Tests;
 public sealed class DesktopPreferencesTests
 {
     [Fact]
+    public async Task PersistentPreferences_WithRetiredFragmentLimit_PreservesOtherSettings()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var directory = Path.Combine(Path.GetTempPath(), $"lexverse-desktop-{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "desktop.json");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            await File.WriteAllTextAsync(path, """
+                {"schemaVersion":1,"preferences":{"appLanguage":"vi","ocrMode":"comic","scanIntervalMs":750,"maxOcrFragments":24}}
+                """, cancellationToken);
+            using var service = new PersistentDesktopPreferencesService(path);
+            Assert.Equal("vi", service.Current.AppLanguage);
+            Assert.Equal("comic", service.Current.OcrMode);
+            Assert.Equal(750, service.Current.ScanIntervalMs);
+
+            await service.UpdateAsync(service.Current, cancellationToken);
+            var json = await File.ReadAllTextAsync(path, cancellationToken);
+            Assert.DoesNotContain("maxOcrFragments", json, StringComparison.Ordinal);
+            using var reloaded = new PersistentDesktopPreferencesService(path);
+            Assert.Equal(service.Current, reloaded.Current);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task PersistentPreferences_RoundTripEveryDesktopSetting()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -28,7 +60,6 @@ public sealed class DesktopPreferencesTests
             OverlayOpacityPercent = 72,
             OverlayFontScalePercent = 125,
             UseDarkOverlayBlocks = false,
-            MaxOcrFragments = 32,
             TranslationInstruction = "Translate as concise Vietnamese.",
             PopupShortcut = "Ctrl+F6",
             RegionShortcut = "Alt+R",
@@ -72,7 +103,6 @@ public sealed class DesktopPreferencesTests
             ScanIntervalMs = 20,
             OverlayOpacityPercent = 500,
             OverlayFontScalePercent = 10,
-            MaxOcrFragments = 500,
             TranslationInstruction = "   ",
             PopupShortcut = "   "
         }.Normalize();
@@ -84,7 +114,6 @@ public sealed class DesktopPreferencesTests
         Assert.Equal(250, normalized.ScanIntervalMs);
         Assert.Equal(100, normalized.OverlayOpacityPercent);
         Assert.Equal(60, normalized.OverlayFontScalePercent);
-        Assert.Equal(64, normalized.MaxOcrFragments);
         Assert.Equal(DesktopPreferences.DefaultTranslationInstruction, normalized.TranslationInstruction);
         Assert.Equal("F6", normalized.PopupShortcut);
     }
