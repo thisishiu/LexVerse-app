@@ -13,7 +13,7 @@ public sealed class OverlayTextLayoutCalculatorTests
     [InlineData("First line\nSecond line\nThird line", 36, 18, 90, 36)]
     [InlineData("Near right edge", 180, 20, 12, 12)]
     [InlineData("Outside", 180, 20, 0, 0)]
-    public void Calculate_PreservesSourceSizeAndFont(
+    public void Calculate_PreservesSourceDimensions(
         string text, double width, double height, double availableWidth, double expectedWidth)
     {
         var layout = OverlayTextLayoutCalculator.Calculate(
@@ -21,7 +21,23 @@ public sealed class OverlayTextLayoutCalculatorTests
 
         Assert.Equal(expectedWidth, layout.Width);
         Assert.Equal(height, layout.Height);
-        Assert.Equal(20, layout.FontSize);
+        Assert.InRange(layout.FontSize, 0.01, 20);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1.5)]
+    public void Calculate_ShrinksForVietnameseAndWrappedLinesWithoutExpanding(double pixelsPerDip)
+    {
+        var singleLine = OverlayTextLayoutCalculator.Calculate(
+            "Ắ ễ ộ ự g", 200, 10, 200, 20, 8, 4, 2, pixelsPerDip);
+        var multipleLines = OverlayTextLayoutCalculator.Calculate(
+            "Ắ ễ ộ ự g\nẮ ễ ộ ự g", 200, 10, 200, 20, 8, 4, 2, pixelsPerDip);
+
+        Assert.Equal(10, singleLine.Height);
+        Assert.Equal(10, multipleLines.Height);
+        Assert.True(singleLine.FontSize < 20);
+        Assert.True(multipleLines.FontSize < singleLine.FontSize);
     }
 
     [Theory]

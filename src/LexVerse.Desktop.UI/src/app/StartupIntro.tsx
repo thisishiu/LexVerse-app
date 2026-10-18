@@ -20,6 +20,7 @@ export function StartupIntro({ ready, onComplete }: { ready: boolean; onComplete
   useEffect(() => {
     const player = video.current;
     if (!player) return;
+    player.volume = 0.1; // Âm lượng 30%
     void player.play().catch(() => setPhase("holding"));
     // A missing codec or stalled asset must not trap the user in the intro.
   }, []);

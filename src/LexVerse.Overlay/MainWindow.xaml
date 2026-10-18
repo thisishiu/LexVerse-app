@@ -34,18 +34,18 @@
                             Height="{Binding Height}"
                             MinHeight="{Binding MinHeight}"
                             Padding="4,2"
+                            SizeChanged="TranslationBox_SizeChanged"
                             ClipToBounds="True"
                             Background="{Binding Background}"
                             BorderBrush="{Binding BorderBrush}"
                             BorderThickness="1">
                         <TextBlock Text="{Binding Text}"
+                                   FontFamily="Segoe UI"
                                    FontSize="{Binding FontSize}"
                                    Foreground="{Binding Foreground}"
                                    FontWeight="SemiBold"
-                                   LineStackingStrategy="BlockLineHeight"
-                                   LineHeight="{Binding FontSize}"
                                    TextWrapping="Wrap"
-                                   TextTrimming="CharacterEllipsis"
+                                   TextTrimming="None"
                                    VerticalAlignment="Center"/>
                     </Border>
                 </DataTemplate>

@@ -65,10 +65,12 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
             _window.Show();
         }
 
-        var nextItems = frame.Items.Select(CreateTextItem).ToList();
+        var nextItems = frame.Items.Select(CreateTextItem)
+            .Where(item => item.Width > 0 && item.Height > 0).ToList();
         if (_preferences.Current.ShowOcrDebugBoxes)
         {
-            nextItems.AddRange(frame.Items.Select(CreateDebugItem));
+            nextItems.AddRange(frame.Items.Select(CreateDebugItem)
+                .Where(item => item.Width > 0 && item.Height > 0));
         }
 
         ReconcileItems(nextItems);
@@ -109,7 +111,11 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
             MinHeight = layout.Height,
             FontSize = layout.FontSize,
             Background = useDarkBlocks ? "#F018181B" : "#F5FFFFFF",
-            BorderBrush = useDarkBlocks ? "#4DFFFFFF" : "#29000000",
+
+            // khung viền của box
+            // BorderBrush = useDarkBlocks ? "#4DFFFFFF" : "#29000000",
+            BorderBrush = "Transparent",
+            
             Foreground = useDarkBlocks ? "White" : "#111827"
         };
     }

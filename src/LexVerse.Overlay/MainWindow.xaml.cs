@@ -31,6 +31,16 @@ namespace LexVerse.Overlay
             DataContext = this;
         }
 
+        private void TranslationBox_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Border box)
+            {
+                var (padding, border) = OverlayTextLayoutCalculator.GetInsets(e.NewSize.Width, e.NewSize.Height);
+                box.Padding = padding;
+                box.BorderThickness = border;
+            }
+        }
+
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             if (_pendingPhysicalBounds is { } pendingPhysicalBounds)
