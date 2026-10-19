@@ -61,7 +61,8 @@ export function useDesktopApp() {
     try {
       await action();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "operation-failed");
+      const code = reason instanceof Error ? reason.message : "operation-failed";
+      if (code !== "operation-cancelled") setError(code);
     } finally {
       setBusy(undefined);
     }

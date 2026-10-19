@@ -87,12 +87,14 @@ export interface DesktopSnapshot {
   };
   realtime: {
     status: string;
+    errorCode?: string;
     canStartRegion: boolean;
     canStartFullScreen: boolean;
     canStop: boolean;
     lastFrameMilliseconds?: number;
     performanceBudgetExceeded: boolean;
   };
+  quickTranslationErrorCode?: string;
   commerce: {
     configured: boolean;
     status: string;

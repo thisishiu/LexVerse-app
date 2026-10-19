@@ -94,7 +94,7 @@ public sealed class RealtimeTranslationCoordinator : IAsyncDisposable
                 SetState(new RealtimeCoordinatorState(
                     RealtimeCoordinatorStatus.Faulted,
                     request.CaptureKind,
-                    "start-failed"));
+                    TranslationFailure.Code(exception)));
                 RecordSession(
                     request,
                     correlationId,
@@ -202,14 +202,14 @@ public sealed class RealtimeTranslationCoordinator : IAsyncDisposable
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
-        catch
+        catch (Exception exception)
         {
             outcome = OperationalOutcome.Failed;
             failureCode = OperationalFailureCode.Pipeline;
             SetState(new RealtimeCoordinatorState(
                 RealtimeCoordinatorStatus.Faulted,
                 request.CaptureKind,
-                "pipeline-failed"));
+                TranslationFailure.Code(exception)));
         }
         finally
         {
@@ -222,7 +222,7 @@ public sealed class RealtimeTranslationCoordinator : IAsyncDisposable
                 run.CleanupFailed = true;
                 outcome = OperationalOutcome.Failed;
                 failureCode = OperationalFailureCode.Pipeline;
-                SetState(new RealtimeCoordinatorState(
+                if (State.Status != RealtimeCoordinatorStatus.Faulted) SetState(new RealtimeCoordinatorState(
                     RealtimeCoordinatorStatus.Faulted,
                     request.CaptureKind,
                     "cleanup-failed"));
@@ -237,7 +237,7 @@ public sealed class RealtimeTranslationCoordinator : IAsyncDisposable
                 run.CleanupFailed = true;
                 outcome = OperationalOutcome.Failed;
                 failureCode = OperationalFailureCode.Pipeline;
-                SetState(new RealtimeCoordinatorState(
+                if (State.Status != RealtimeCoordinatorStatus.Faulted) SetState(new RealtimeCoordinatorState(
                     RealtimeCoordinatorStatus.Faulted,
                     request.CaptureKind,
                     "cleanup-failed"));

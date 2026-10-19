@@ -64,3 +64,16 @@ it("does not signal ready when the initial snapshot fails", async () => {
   expect(native.commands.map(command => command.type)).toEqual(["app.getSnapshot"]);
   unmount();
 });
+
+it("clears old errors on retry and does not report intentional cancellation", async () => {
+  const native = host();
+  const { result, unmount } = renderHook(() => useDesktopApp());
+  native.reply(native.commands[0], true, snapshot);
+  await waitFor(() => expect(native.commands.at(-1)?.type).toBe("app.uiReady"));
+  native.reply(native.commands.at(-1)!, true);
+  await act(async () => { await result.current.run("Translate", async () => { throw new Error("translation-timeout"); }); });
+  expect(result.current.error).toBe("translation-timeout");
+  await act(async () => { await result.current.run("Translate", async () => { throw new Error("operation-cancelled"); }); });
+  expect(result.current.error).toBeUndefined();
+  unmount();
+});

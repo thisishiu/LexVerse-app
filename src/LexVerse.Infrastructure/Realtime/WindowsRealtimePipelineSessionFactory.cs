@@ -40,7 +40,7 @@ public sealed class WindowsRealtimePipelineSessionFactory : IRealtimePipelineSes
         var monitor = _monitorService.GetNearestMonitor(request.TargetScreenRect);
         var monitorBounds = _monitorService.GetMonitorBounds(monitor);
         var monitorDpi = _monitorService.GetMonitorDpi(monitor);
-        var captureItem = GraphicsCaptureItemFactory.CreateForMonitor(monitor);
+        var captureItem = AtStage("capture", () => GraphicsCaptureItemFactory.CreateForMonitor(monitor));
         var source = new CaptureSourceInfo(
             request.CaptureKind == RealtimeCaptureKind.Region
                 ? CaptureSourceKind.Region
@@ -49,7 +49,7 @@ public sealed class WindowsRealtimePipelineSessionFactory : IRealtimePipelineSes
                 ? "Selected region"
                 : "Full screen",
             MonitorDeviceName: monitor.ToString());
-        var captureSession = WindowsGraphicsCaptureSession.Create(
+        var captureSession = AtStage("capture", () => WindowsGraphicsCaptureSession.Create(
             captureItem,
             frameSize => new FrameGeometry(
                 frameSize,
@@ -58,7 +58,7 @@ public sealed class WindowsRealtimePipelineSessionFactory : IRealtimePipelineSes
                 monitorDpi.ScaleX,
                 monitorDpi.ScaleY,
                 0),
-            source);
+            source));
 
         try
         {
@@ -66,11 +66,11 @@ public sealed class WindowsRealtimePipelineSessionFactory : IRealtimePipelineSes
             var regionProvider = request.CaptureKind == RealtimeCaptureKind.Region
                 ? new ScreenRectOcrRegionProvider(request.TargetScreenRect, request.Options.Mode)
                 : null;
-            IOcrService ocrService = new WindowsOcrService(
+            IOcrService ocrService = AtStage("ocr", () => new WindowsOcrService(
                 request.OcrLanguageTag,
                 request.Options.Mode == OcrProcessingMode.Comic
                     ? OcrTextBlockGroupingMode.ComicSpeechBubbles
-                    : OcrTextBlockGroupingMode.Layout);
+                    : OcrTextBlockGroupingMode.Layout));
             var pipeline = new RealtimeTranslationPipeline(
                 captureSession,
                 new ExactFrameChangeDetector(),
@@ -87,6 +87,13 @@ public sealed class WindowsRealtimePipelineSessionFactory : IRealtimePipelineSes
             await captureSession.DisposeAsync();
             throw;
         }
+    }
+
+    private static T AtStage<T>(string stage, Func<T> create)
+    {
+        try { return create(); }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        { throw new PipelineStageException(stage, exception); }
     }
 
     private sealed class WindowsRealtimePipelineSession(

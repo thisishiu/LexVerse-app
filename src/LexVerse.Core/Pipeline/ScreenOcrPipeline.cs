@@ -30,7 +30,10 @@ public sealed class ScreenOcrPipeline
     {
         var totalTimer = Stopwatch.StartNew();
         var captureTimer = Stopwatch.StartNew();
-        var frame = await _captureSession.CaptureFrameAsync(cancellationToken);
+        CapturedFrame frame;
+        try { frame = await _captureSession.CaptureFrameAsync(cancellationToken); }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        { throw new PipelineStageException("capture", exception); }
         captureTimer.Stop();
 
         var changeDetectionTimer = Stopwatch.StartNew();
@@ -56,7 +59,10 @@ public sealed class ScreenOcrPipeline
             };
         }
 
-        var ocrResult = await RecognizeFrameOrRegionsAsync(frame, cancellationToken);
+        TimedOcrResult ocrResult;
+        try { ocrResult = await RecognizeFrameOrRegionsAsync(frame, cancellationToken); }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        { throw new PipelineStageException("ocr", exception); }
         totalTimer.Stop();
 
         return new ScreenOcrPipelineResult(

@@ -47,7 +47,22 @@ public sealed class ServerIntegrationTests
         var handler = new TranslatorHandler { Fail = true };
         using var client = new HttpClient(handler);
         var translator = new RemoteTextTranslator(client, new Uri("https://api.example.test/translations"), new Accounts(), ["translation.popup"]);
-        await Assert.ThrowsAsync<HttpRequestException>(() => translator.TranslateAsync("Hello", "vi", cancellationToken: TestContext.Current.CancellationToken));
+        var failure = await Assert.ThrowsAsync<LexVerse.Application.Diagnostics.TranslationFailureException>(() => translator.TranslateAsync("Hello", "vi", cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal("translation-timeout", failure.Code);
+        Assert.Equal(1, handler.Calls);
+    }
+
+    [Theory]
+    [InlineData("quota_exceeded", "translation-quota-exceeded")]
+    [InlineData("unknown_remote_error", "translation-rate-limited")]
+    public async Task RemoteTranslator_UsesOnlyKnownErrorCodes(string remoteCode, string expected)
+    {
+        var handler = new TranslatorHandler { ErrorCode = remoteCode };
+        using var client = new HttpClient(handler);
+        var translator = new RemoteTextTranslator(client, new Uri("https://api.example.test/translations"), new Accounts(), ["translation.popup"]);
+        var failure = await Assert.ThrowsAsync<LexVerse.Application.Diagnostics.TranslationFailureException>(() =>
+            translator.TranslateAsync("Hello", "vi", cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(expected, failure.Code);
         Assert.Equal(1, handler.Calls);
     }
 
@@ -69,9 +84,12 @@ public sealed class ServerIntegrationTests
         public string? Authorization { get; private set; }
         public string[]? Features { get; private set; }
         public bool Fail { get; init; }
+        public string? ErrorCode { get; init; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Calls++;
+            if (ErrorCode is not null) return new HttpResponseMessage(HttpStatusCode.TooManyRequests)
+            { Content = new StringContent(JsonSerializer.Serialize(new { error = ErrorCode, message = "private details" })) };
             Authorization = request.Headers.Authorization?.ToString();
             if (Fail) return new HttpResponseMessage(HttpStatusCode.GatewayTimeout);
             using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));

@@ -5,6 +5,7 @@ import type { AppRoute } from "./app/route-types";
 import { useDesktopApp } from "./app/useDesktopApp";
 import { StartupIntro } from "./app/StartupIntro";
 import "./styles.css";
+import { isTranslationError, translationErrorMessage } from "./translationErrors";
 
 function routeFromHash(): AppRoute {
   const candidate = window.location.hash.replace(/^#\/?/, "") as AppRoute;
@@ -12,6 +13,7 @@ function routeFromHash(): AppRoute {
 }
 
 function errorMessage(error: string, vietnamese: boolean) {
+  if (isTranslationError(error)) return translationErrorMessage(error, vietnamese);
   const messages: Record<string, [string, string]> = {
     "consent-declined": ["Privacy consent was not changed.", "Quyền xử lý dữ liệu không được thay đổi."],
     "invalid-offer": ["That plan is no longer available. Refresh access and try again.", "Gói này không còn khả dụng. Hãy đồng bộ quyền truy cập rồi thử lại."],

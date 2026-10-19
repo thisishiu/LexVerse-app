@@ -12,6 +12,7 @@ import {
   Square
 } from "lucide-react";
 import type { RouteProps } from "../../app/route-types";
+import { translationErrorMessage } from "../../translationErrors";
 
 export const languages = [
   ["auto", "Auto detect"],
@@ -142,6 +143,11 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
             </section>
           </div>
 
+          {snapshot?.quickTranslationErrorCode && (
+            <div className="inline-notice notice-warning" role="alert">
+              <p>{translationErrorMessage(snapshot.quickTranslationErrorCode, isVietnamese)}</p>
+            </div>
+          )}
           <footer className="translator-footer">
             {!remoteProcessingAllowed ? (
               <button type="button" className="privacy-link" onClick={() => navigate("settings")}>
@@ -170,6 +176,12 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
               </span>
             </header>
 
+            {(realtimeStatus === "faulted" || realtimeStatus === "error") && (
+              <div className="inline-notice notice-warning compact-notice" role="alert">
+                <ShieldAlert size={18} />
+                <p>{translationErrorMessage(snapshot?.realtime.errorCode ?? "translation-unknown", isVietnamese)}</p>
+              </div>
+            )}
             <div className="live-actions">
               <button
                 type="button"

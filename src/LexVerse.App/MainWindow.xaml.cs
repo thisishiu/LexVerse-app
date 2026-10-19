@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using LexVerse.Application.Desktop;
+using LexVerse.Application.Diagnostics;
 using LexVerse.Application.Modules;
 using LexVerse.Application.Commerce;
 using LexVerse.Application.Popup;
@@ -26,6 +27,8 @@ namespace LexVerse.App;
 public partial class MainWindow : Window
 {
     private const int HotkeyId = 0x4C56;
+    private string? _translationErrorCode;
+    private string? _realtimeStartErrorCode;
     private const int WmHotkey = 0x0312;
     private const uint ModAlt = 0x0001;
     private const uint ModControl = 0x0002;
@@ -339,6 +342,7 @@ public partial class MainWindow : Window
 
     private async Task StartRegionRealtimeAsync()
     {
+        _realtimeStartErrorCode = null;
         if (_isSelectingRegion)
         {
             return;
@@ -376,6 +380,7 @@ public partial class MainWindow : Window
 
     private async Task StartFullScreenRealtimeAsync()
     {
+        _realtimeStartErrorCode = null;
         try
         {
             var handle = new WindowInteropHelper(this).Handle;
@@ -453,7 +458,7 @@ public partial class MainWindow : Window
         {
             if (state.Status == RealtimeCoordinatorStatus.Faulted)
             {
-                _status = "Realtime pipeline stopped after an error. Check provider and OCR availability.";
+                _status = TranslationFailure.Message(state.ErrorCode ?? "translation-unknown", _desktopPreferences.Current.AppLanguage == "vi");
             }
 
             PublishDesktopSnapshot();
@@ -479,9 +484,9 @@ public partial class MainWindow : Window
 
     private void ShowRealtimeStartError(Exception exception)
     {
-        _status = exception is FeatureAccessDeniedException denied
-            ? $"Realtime access unavailable: {denied.Decision.DenialReason}."
-            : "Could not start realtime translation. Check capture permission, OCR language, and provider setup.";
+        if (exception is OperationCanceledException) return;
+        _realtimeStartErrorCode = TranslationFailure.Code(exception);
+        _status = TranslationFailure.Message(TranslationFailure.Code(exception), _desktopPreferences.Current.AppLanguage == "vi");
     }
 
     private async Task RunSelectedTextPopupAsync()
@@ -508,6 +513,7 @@ public partial class MainWindow : Window
             preferences.ClosePopupOnOutsideClick,
             preferences.AllowPopupDragging) : null;
 
+        if (!showPopup) _translationErrorCode = null;
         _status = loadingStatus;
         PublishDesktopSnapshot();
 
@@ -543,18 +549,9 @@ public partial class MainWindow : Window
         {
             popup?.Close();
         }
-        catch (RemoteProcessingConsentRequiredException)
-        {
-            popup?.Close();
-            _status = "Enable external text processing under Privacy before translating.";
-        }
-        catch (FeatureAccessDeniedException exception)
-        {
-            popup?.Close();
-            _status = $"{(showPopup ? "Popup" : "Translation")} access unavailable: {exception.Decision.DenialReason}.";
-        }
         catch (Exception exception)
         {
+            if (!showPopup) _translationErrorCode = TranslationFailure.Code(exception);
             new LocalExceptionLog().Report("popup-translation", exception);
             if (popup is not null && !popup.IsVisible)
             {
@@ -562,7 +559,7 @@ public partial class MainWindow : Window
             }
 
             popup?.ShowError(
-                "Translation unavailable",
+                preferences.AppLanguage == "vi" ? "Không thể dịch" : "Translation unavailable",
                 GetPopupTranslationError(exception));
             _status = GetPopupTranslationError(exception);
         }
@@ -578,28 +575,8 @@ public partial class MainWindow : Window
         }
     }
 
-    private static string GetPopupTranslationError(Exception exception) => exception switch
-    {
-        Win32Exception =>
-            "Could not copy the selected text. Select text in an app running with the same permissions as LexVerse and try again.",
-        HttpRequestException { StatusCode: HttpStatusCode.Unauthorized } =>
-            "Your session has expired. Sign out and sign in again.",
-        HttpRequestException { StatusCode: HttpStatusCode.Forbidden } =>
-            "Your account does not have access to this translation feature. Check your plan.",
-        HttpRequestException { StatusCode: HttpStatusCode.TooManyRequests } =>
-            "The translation quota or request limit has been reached. Check your plan and try again later.",
-        HttpRequestException { StatusCode: HttpStatusCode.BadGateway } =>
-            "The server could not complete the translation with its provider (HTTP 502). Check the server translation logs.",
-        HttpRequestException { StatusCode: HttpStatusCode.GatewayTimeout } =>
-            "The translation provider timed out (HTTP 504). Check the server logs before retrying.",
-        HttpRequestException { StatusCode: { } status } =>
-            $"The server rejected the translation (HTTP {(int)status}). Check the server logs.",
-        HttpRequestException =>
-            "Cannot connect to the translation server. Check your network connection and server address.",
-        OperationCanceledException =>
-            "The translation request timed out. Check the server logs before retrying.",
-        _ => "Translation failed. Check your sign-in, desktop configuration, and local app error log."
-    };
+    private string GetPopupTranslationError(Exception exception) =>
+        TranslationFailure.Message(TranslationFailure.Code(exception), _desktopPreferences.Current.AppLanguage == "vi");
 
     private PopupTranslationRequest CreateRequest()
     {

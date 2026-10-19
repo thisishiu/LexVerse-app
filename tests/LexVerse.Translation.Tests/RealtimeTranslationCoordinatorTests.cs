@@ -15,6 +15,23 @@ namespace LexVerse.Translation.Tests;
 public sealed class RealtimeTranslationCoordinatorTests
 {
     [Fact]
+    public async Task FailureKeepsCauseAndRestartClearsIt()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var failed = new FakeSession(failure: new TranslationFailureException("translation-quota-exceeded"));
+        var recovered = new FakeSession();
+        await using var coordinator = CreateCoordinator(true, new FakeSessionFactory(failed, recovered), new FakeOutput());
+        await coordinator.StartAsync(CreateRequest(), token);
+        await failed.DisposedSignal.Task.WaitAsync(token);
+        Assert.Equal("translation-quota-exceeded", coordinator.State.ErrorCode);
+        await coordinator.StartAsync(CreateRequest(), token);
+        Assert.Equal(RealtimeCoordinatorStatus.Running, coordinator.State.Status);
+        Assert.Null(coordinator.State.ErrorCode);
+        await coordinator.StopAsync(token);
+        Assert.Null(coordinator.State.ErrorCode);
+    }
+
+    [Fact]
     public async Task Start_ProcessesFramesAndStopDisposesSessionAndClearsOutput()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -92,7 +109,7 @@ public sealed class RealtimeTranslationCoordinatorTests
         await faulted.Task.WaitAsync(cancellationToken);
         await session.DisposedSignal.Task.WaitAsync(cancellationToken);
 
-        Assert.Equal("pipeline-failed", coordinator.State.ErrorCode);
+        Assert.Equal("translation-unknown", coordinator.State.ErrorCode);
         Assert.True(session.Disposed);
         Assert.True(output.ClearCount >= 1);
     }
@@ -277,7 +294,8 @@ public sealed class RealtimeTranslationCoordinatorTests
 
     private sealed class FakeSession(
         bool throwOnProcess = false,
-        bool throwOnDispose = false) : IRealtimePipelineSession
+        bool throwOnDispose = false,
+        Exception? failure = null) : IRealtimePipelineSession
     {
         public TaskCompletionSource FirstProcess { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -292,8 +310,8 @@ public sealed class RealtimeTranslationCoordinatorTests
             CancellationToken cancellationToken = default)
         {
             FirstProcess.TrySetResult();
-            return throwOnProcess
-                ? Task.FromException<RealtimeFrameUpdate>(new InvalidOperationException("pipeline failed"))
+            return throwOnProcess || failure is not null
+                ? Task.FromException<RealtimeFrameUpdate>(failure ?? new InvalidOperationException("pipeline failed"))
                 : Task.FromResult(CreateUpdate());
         }
 

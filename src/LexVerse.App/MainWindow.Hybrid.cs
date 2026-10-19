@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
 using LexVerse.Application.Desktop;
+using LexVerse.Application.Diagnostics;
 using LexVerse.Application.Privacy;
 using Microsoft.Web.WebView2.Core;
 
@@ -189,9 +190,11 @@ public partial class MainWindow
         {
             PostDesktopResult(command.Id, false, errorCode: "operation-cancelled");
         }
-        catch
+        catch (Exception exception)
         {
-            PostDesktopResult(command.Id, false, errorCode: "operation-failed");
+            PostDesktopResult(command.Id, false, errorCode:
+                command.Type.StartsWith("translation.", StringComparison.Ordinal) || command.Type.StartsWith("realtime.", StringComparison.Ordinal)
+                    ? TranslationFailure.Code(exception) : "operation-failed");
         }
         finally
         {
@@ -487,9 +490,11 @@ public partial class MainWindow
                 allowRemoteTextProcessing = _privacyPreferences.Current.AllowRemoteTextProcessing,
                 allowLocalDiagnostics = _privacyPreferences.Current.AllowLocalDiagnostics
             },
+            quickTranslationErrorCode = _translationErrorCode,
             realtime = new
             {
-                status = realtime.Status.ToString().ToLowerInvariant(),
+                status = _realtimeStartErrorCode is null ? realtime.Status.ToString().ToLowerInvariant() : "faulted",
+                errorCode = _realtimeStartErrorCode ?? realtime.ErrorCode,
                 canStartRegion = CanStartRegion,
                 canStartFullScreen = CanStartFullScreen,
                 canStop = IsRealtimeRunning,
