@@ -2,11 +2,16 @@ export type CommandType =
   | "app.getSnapshot"
   | "app.uiReady"
   | "app.introCompleted"
+  | "app.setExplanationMode"
   | "translation.translateQuickText"
   | "translation.triggerSelectedText"
   | "realtime.selectRegion"
   | "realtime.start"
   | "realtime.startFullScreen"
+  | "realtime.listWindows"
+  | "realtime.getWindowPreviews"
+  | "realtime.cancelWindowPreviews"
+  | "realtime.startWindow"
   | "realtime.stop"
   | "realtime.resetOverlay"
   | "settings.update"
@@ -64,7 +69,6 @@ export interface DesktopSettings {
   closePopupOnOutsideClick: boolean;
   allowPopupDragging: boolean;
   showOcrDebugBoxes: boolean;
-  showPopupBeforeTranslationFinishes: boolean;
   scanIntervalMs: number;
   overlayOpacityPercent: number;
   overlayFontScalePercent: number;
@@ -90,6 +94,8 @@ export interface DesktopSnapshot {
     errorCode?: string;
     canStartRegion: boolean;
     canStartFullScreen: boolean;
+    canStartWindow?: boolean;
+    selectedWindowName?: string;
     canStop: boolean;
     lastFrameMilliseconds?: number;
     performanceBudgetExceeded: boolean;
@@ -103,3 +109,9 @@ export interface DesktopSnapshot {
     offers: OfferSnapshot[];
   };
 }
+export interface WindowPreview {
+  id: string;
+  status: "available" | "unavailable" | "closed";
+  imageDataUrl?: string;
+}
+

@@ -26,6 +26,6 @@ it("keeps recovery controls available while waiting and hides duplicate sign-in 
   expect(command.mock.calls.map(call => call[0])).toEqual(["account.reopenSignIn", "account.copySignInLink", "account.cancelSignIn"]);
   snapshot.commerce.authentication = { status: "error", error: "sign-in-cancelled-or-expired" };
   rerender(<AccountPage app={app} navigate={vi.fn()} />);
-  expect(screen.getByRole("button", { name: /Sign in or create account/ })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Sign in or create account" })).toBeEnabled();
   expect(screen.queryByRole("button", { name: "Copy link" })).not.toBeInTheDocument();
 });

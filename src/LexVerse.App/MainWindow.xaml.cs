@@ -55,11 +55,14 @@ public partial class MainWindow : Window
         _privacyPreferences.Current.AllowRemoteTextProcessing && !IsRealtimeRunning && !_isSelectingRegion;
     private bool CanStartFullScreen => _fullScreenAccessAllowed &&
         _privacyPreferences.Current.AllowRemoteTextProcessing && !IsRealtimeRunning;
+    private bool _windowAccessAllowed;
     private bool _regionAccessAllowed;
     private bool _fullScreenAccessAllowed;
     private DispatcherTimer? _featureAccessTimer;
     private bool _refreshingFeatureAccess;
     private CancellationTokenSource? _popupCancellation;
+    private TranslationPopupWindow? _popupWindow;
+    private SelectionOverlayWindow? _popupSelector;
     private HwndSource? _hwndSource;
     private bool _hotkeyRegistered;
     private string _registeredPopupShortcut = "F6";
@@ -198,6 +201,7 @@ public partial class MainWindow : Window
             var region = await _featureAccessService.GetAccessAsync(ProductFeatures.RegionTranslation, token);
             var fullScreen = await _featureAccessService.GetAccessAsync(ProductFeatures.FullScreenTranslation, token);
             if (_cleanupStarted) return;
+            _windowAccessAllowed = (await _featureAccessService.GetAccessAsync(ProductFeatures.WindowTranslation, token)).IsAllowed;
             _regionAccessAllowed = region.IsAllowed;
             _fullScreenAccessAllowed = fullScreen.IsAllowed;
             PublishDesktopSnapshot();
@@ -492,26 +496,37 @@ public partial class MainWindow : Window
     private async Task RunSelectedTextPopupAsync()
     {
         await RunTranslationAsync(
-            token => _popupModule.UseCase.TranslateSelectedTextAsync(CreateRequest(), token),
+            token => _popupModule.UseCase.TranslateSelectedTextAsync(CreateRequest(), token, () =>
+            {
+                if (!token.IsCancellationRequested) _popupWindow?.Show();
+            }),
             "Reading highlighted text…",
-            showPopup: true);
+            showPopup: true, selectImageWhenEmpty: true);
     }
 
     private async Task RunTranslationAsync(
         Func<CancellationToken, Task<PopupTranslationResult>> operation,
         string loadingStatus,
         bool showPopup,
-        Action<string>? translationCompleted = null)
+        Action<string>? translationCompleted = null,
+        bool selectImageWhenEmpty = false)
     {
         _popupCancellation?.Cancel();
-        _popupCancellation?.Dispose();
+        _popupSelector?.Close();
+        _popupWindow?.Close();
         var cancellation = new CancellationTokenSource();
         _popupCancellation = cancellation;
         var cancellationToken = cancellation.Token;
         var preferences = _desktopPreferences.Current;
         var popup = showPopup ? new TranslationPopupWindow(
             preferences.ClosePopupOnOutsideClick,
-            preferences.AllowPopupDragging) : null;
+            preferences.AllowPopupDragging, preferences.AppLanguage == "vi") : null;
+        _popupWindow = popup;
+        if (popup is not null) popup.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_popupCancellation, cancellation)) cancellation.Cancel();
+            if (ReferenceEquals(_popupWindow, popup)) _popupWindow = null;
+        };
 
         if (!showPopup) _translationErrorCode = null;
         _status = loadingStatus;
@@ -520,12 +535,38 @@ public partial class MainWindow : Window
         try
         {
             var operationTask = operation(cancellationToken);
-            if (popup is not null && preferences.ShowPopupBeforeTranslationFinishes)
+            if (popup is not null && !selectImageWhenEmpty)
             {
                 popup.Show();
             }
 
             var result = await operationTask;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!result.HasSelection && selectImageWhenEmpty)
+            {
+                popup?.Hide();
+                var selector = new SelectionOverlayWindow();
+                _popupSelector = selector;
+                using var registration = cancellationToken.Register(() => Dispatcher.BeginInvoke(() => { if (selector.IsVisible) selector.Close(); }));
+                bool? selected;
+                try { selected = selector.ShowDialog(); }
+                finally { if (ReferenceEquals(_popupSelector, selector)) _popupSelector = null; }
+                cancellationToken.ThrowIfCancellationRequested();
+                if (selected != true || selector.Selection is not { } region)
+                {
+                    popup?.Close();
+                    _status = "Region selection canceled.";
+                    return;
+                }
+                // Wait for the closed overlay to leave the compositor before capturing.
+                await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+                cancellationToken.ThrowIfCancellationRequested();
+                var png = PopupRegionCapture.Capture(region);
+                cancellationToken.ThrowIfCancellationRequested();
+                popup?.Show();
+                result = await _popupModule.UseCase.TranslateImageAsync(png, CreateRequest(), cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
             if (!result.HasSelection || result.Translation is null || result.SourceText is null)
             {
                 popup?.Close();
@@ -539,9 +580,8 @@ public partial class MainWindow : Window
             }
 
             popup?.ShowResult(
-                result.SourceText,
                 result.Translation.TranslatedText,
-                GetTargetLanguageLabel());
+                result.Terms);
             translationCompleted?.Invoke(result.Translation.TranslatedText);
             _status = "Translation complete.";
         }
@@ -551,6 +591,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
+            if (cancellationToken.IsCancellationRequested) { popup?.Close(); return; }
             if (!showPopup) _translationErrorCode = TranslationFailure.Code(exception);
             new LocalExceptionLog().Report("popup-translation", exception);
             if (popup is not null && !popup.IsVisible)
@@ -598,12 +639,6 @@ public partial class MainWindow : Window
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             preferences.PreserveAcronymsAndTechnicalTerms);
 
-    private string GetTargetLanguageLabel() => _targetLanguage switch
-    {
-        "vi" => "Vietnamese", "en" => "English", "ja" => "Japanese",
-        "ko" => "Korean", "zh" => "Chinese", _ => "Translation"
-    };
-
     private void CloseStartup_Click(object sender, RoutedEventArgs e) => Close();
 
     private IntPtr WndProc(
@@ -616,6 +651,7 @@ public partial class MainWindow : Window
         if (message == WmHotkey && wParam.ToInt32() == HotkeyId)
         {
             handled = true;
+            if (_desktopExplanationModeActive && IsActive) return IntPtr.Zero;
             _ = RunSelectedTextPopupAsync();
         }
 
@@ -637,6 +673,9 @@ public partial class MainWindow : Window
         }
 
         _cleanupStarted = true;
+        _popupCancellation?.Cancel();
+        _popupSelector?.Close();
+        _popupWindow?.Close();
         _featureAccessTimer?.Stop();
         IsEnabled = false;
         _status = "Stopping background work…";
@@ -656,7 +695,6 @@ public partial class MainWindow : Window
     {
         ShutdownHybridUiHost();
         _popupCancellation?.Cancel();
-        _popupCancellation?.Dispose();
         _popupCancellation = null;
 
         var handle = new WindowInteropHelper(this).Handle;

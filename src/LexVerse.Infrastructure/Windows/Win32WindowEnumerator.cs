@@ -53,7 +53,7 @@ public sealed class Win32WindowEnumerator : IWindowEnumerator
 
     private bool ShouldInclude(IntPtr hwnd)
     {
-        if (!IsWindowVisible(hwnd) || IsIconic(hwnd))
+        if (!IsWindowVisible(hwnd))
         {
             return false;
         }

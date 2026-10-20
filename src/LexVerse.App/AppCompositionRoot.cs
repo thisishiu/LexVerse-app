@@ -29,6 +29,7 @@ public sealed class AppCompositionRoot : IDisposable
     private readonly FeatureAccessService _featureAccessService;
     private readonly SignedEntitlementFileCache? _entitlementCache;
     private readonly HttpClient _backendHttpClient;
+    private readonly HttpClient _popupHttpClient;
     private readonly IAccountSessionProvider _accountProvider;
     private readonly IFeatureAccessService _accessService;
     private readonly IPrivacyPreferencesService _privacyPreferences;
@@ -62,6 +63,7 @@ public sealed class AppCompositionRoot : IDisposable
 
         _desktopPreferences = desktopPreferences;
         _backendHttpClient = new HttpClient();
+        _popupHttpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(6) };
         var launcher = new WindowsExternalUriLauncher();
         _accountProvider = CreateAccountProvider(_backendHttpClient, launcher);
         var entitlementProvider = CreatePaidEntitlementProvider(
@@ -79,7 +81,11 @@ public sealed class AppCompositionRoot : IDisposable
             featureGate,
             selectedTextReader,
             translator,
-            telemetry));
+            telemetry,
+            new RemotePopupDocumentTranslator(_popupHttpClient,
+                () => new Uri((GetAbsoluteUri("LEXVERSE_TRANSLATION_ENDPOINT")
+                    ?? throw new InvalidOperationException("Configure LEXVERSE_TRANSLATION_ENDPOINT before translating.")).AbsoluteUri.TrimEnd('/') + "/popup"),
+                _accountProvider, _privacyPreferences)));
         _realtimeOutput = new WpfRealtimeOverlayOutput(
             System.Windows.Application.Current.Dispatcher,
             _desktopPreferences);
@@ -87,7 +93,7 @@ public sealed class AppCompositionRoot : IDisposable
             translator,
             monitorService: MonitorService,
             translatorFactory: request => CreateRemoteTranslator(new[] {
-                request.CaptureKind == LexVerse.Application.Realtime.RealtimeCaptureKind.Region ? "translation.region" : "translation.full-screen"
+                request.RequiredFeature.Value
             }.Concat(request.Options.Mode switch {
                 LexVerse.Core.Pipeline.OcrProcessingMode.Comic => new[] { "mode.comic" },
                 LexVerse.Core.Pipeline.OcrProcessingMode.Document => new[] { "mode.document" },
@@ -147,6 +153,7 @@ public sealed class AppCompositionRoot : IDisposable
         _entitlementCache?.Dispose();
         (_accountProvider as IDisposable)?.Dispose();
         _backendHttpClient.Dispose();
+        _popupHttpClient.Dispose();
         _ownedPrivacyPreferences?.Dispose();
         _ownedDesktopPreferences?.Dispose();
     }

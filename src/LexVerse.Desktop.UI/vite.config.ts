@@ -8,7 +8,9 @@ export default defineConfig({
     outDir: "obj/dist",
     emptyOutDir: true,
     sourcemap: false,
-    target: "es2022"
+    assetsInlineLimit: 0,
+    target: "es2022",
+    rollupOptions: { input: { main: "index.html", popup: "popup.html" } }
   },
   test: {
     environment: "jsdom",

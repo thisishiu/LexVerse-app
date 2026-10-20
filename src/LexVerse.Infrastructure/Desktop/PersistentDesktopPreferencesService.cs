@@ -97,6 +97,7 @@ public sealed class PersistentDesktopPreferencesService : IDesktopPreferencesSer
             if (document is JsonObject root && root["preferences"] is JsonObject preferences)
             {
                 preferences.Remove("maxOcrFragments");
+                preferences.Remove("showPopupBeforeTranslationFinishes");
             }
 
             var wire = document.Deserialize<DesktopPreferencesWire>(JsonOptions);

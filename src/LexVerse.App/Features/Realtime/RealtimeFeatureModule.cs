@@ -10,7 +10,7 @@ public sealed class RealtimeFeatureModule(
     public FeatureModuleDescriptor Descriptor { get; } = new(
         "realtime-translation",
         "Feature.RealtimeTranslation",
-        [ProductFeatures.RegionTranslation, ProductFeatures.FullScreenTranslation]);
+        [ProductFeatures.RegionTranslation, ProductFeatures.FullScreenTranslation, ProductFeatures.WindowTranslation]);
 
     public RealtimeTranslationCoordinator Coordinator { get; } =
         coordinator ?? throw new ArgumentNullException(nameof(coordinator));

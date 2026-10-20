@@ -24,4 +24,10 @@ public sealed record PopupTranslationResult
     public TextTranslationResult? Translation { get; }
 
     public bool HasSelection => Translation is not null;
+
+    public IReadOnlyList<PopupTerm> Terms { get; init; } = [];
+
+    public static PopupTranslationResult FromDocument(PopupDocument document, PopupTranslationRequest request) =>
+        Success(document.SourceText, new TextTranslationResult(document.SourceText, document.TranslationMarkdown,
+            request.TargetLanguage, request.SourceLanguage)) with { Terms = document.Terms };
 }

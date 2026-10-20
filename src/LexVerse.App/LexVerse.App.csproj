@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <DesktopUiRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\LexVerse.Desktop.UI'))</DesktopUiRoot>
     <DesktopUiOutput>$(DesktopUiRoot)\obj\dist</DesktopUiOutput>
   </PropertyGroup>
@@ -18,6 +19,11 @@
     <ProjectReference Include="..\LexVerse.Infrastructure\LexVerse.Infrastructure.csproj" />
     <ProjectReference Include="..\LexVerse.OCR\LexVerse.OCR.csproj" />
     <ProjectReference Include="..\LexVerse.Overlay\LexVerse.Overlay.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+    <Resource Include="..\LexVerse.Desktop.UI\src\assets\fonts\BeVietnamPro-*.ttf" Link="Fonts\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <Target Name="BuildDesktopUi" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">

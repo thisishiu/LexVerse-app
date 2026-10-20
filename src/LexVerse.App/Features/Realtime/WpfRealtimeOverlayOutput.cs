@@ -6,6 +6,7 @@ using LexVerse.Application.Realtime;
 using LexVerse.Core.Overlay;
 using LexVerse.Overlay;
 using LexVerse.Overlay.Models;
+using LexVerse.Infrastructure.Windows;
 using OverlayWindow = LexVerse.Overlay.MainWindow;
 
 namespace LexVerse.App.Features.Realtime;
@@ -22,6 +23,8 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
     private OverlayWindow? _window;
     private OverlayRenderFrame? _lastFrame;
     private bool _disposed;
+    private readonly DispatcherTimer _windowTimer;
+    private readonly Win32WindowTracker _tracker = new();
 
     public WpfRealtimeOverlayOutput(
         Dispatcher dispatcher,
@@ -30,6 +33,9 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _preferences.Changed += Preferences_Changed;
+        _windowTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Render,
+            (_, _) => UpdateWindowPlacement(), dispatcher);
+        _windowTimer.Stop();
     }
 
     public Task RenderAsync(
@@ -54,6 +60,13 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
         }
 
         _window ??= new OverlayWindow(_items);
+        _window.TargetWindow = frame.WindowTarget?.Hwnd ?? IntPtr.Zero;
+        _window.Topmost = frame.WindowTarget is null;
+        if (frame.WindowTarget is not null)
+        {
+            _windowTimer.Start();
+            if (!IsFrameCurrent(frame)) { InvalidateWindowFrame(); return; }
+        }
         _window.SetPhysicalBounds(
             frame.Trace.Geometry.SourceScreenRect,
             frame.Trace.Geometry.DpiScaleX,
@@ -74,13 +87,49 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
         }
 
         ReconcileItems(nextItems);
+        UpdateWindowPlacement();
+    }
+
+    private bool IsFrameCurrent(OverlayRenderFrame frame)
+    {
+        if (frame.WindowTarget is not { } target || frame.Trace is null) return false;
+        if (!WindowTargetRegistry.IsCurrent(target)) return false;
+        var snapshot = _tracker.GetSnapshot(target.Hwnd);
+        return snapshot.IsVisible && !snapshot.IsMinimized &&
+            snapshot.WindowRect == frame.Trace.Geometry.SourceScreenRect &&
+            snapshot.Dpi.ScaleX == frame.Trace.Geometry.DpiScaleX &&
+            snapshot.Dpi.ScaleY == frame.Trace.Geometry.DpiScaleY;
+    }
+
+    private void UpdateWindowPlacement()
+    {
+        if (_window is null || _lastFrame?.WindowTarget is null || _lastFrame.Trace is null) return;
+        var target = _lastFrame.WindowTarget;
+        if (!WindowTargetRegistry.IsCurrent(target)) { InvalidateWindowFrame(); return; }
+        var snapshot = _tracker.GetSnapshot(target.Hwnd);
+        var geometry = _lastFrame.Trace!.Geometry;
+        if (!snapshot.IsVisible || snapshot.IsMinimized ||
+            snapshot.WindowRect.Width != geometry.SourceScreenRect.Width ||
+            snapshot.WindowRect.Height != geometry.SourceScreenRect.Height ||
+            snapshot.Dpi.ScaleX != geometry.DpiScaleX || snapshot.Dpi.ScaleY != geometry.DpiScaleY)
+        { InvalidateWindowFrame(); return; }
+        _window.SetPhysicalBounds(snapshot.WindowRect, snapshot.Dpi.ScaleX, snapshot.Dpi.ScaleY);
+        if (!_window.IsVisible) _window.Show();
+        _window.UpdateWindowLayer(snapshot.WindowRect);
+    }
+
+    private void InvalidateWindowFrame()
+    {
+        _window?.Hide();
+        _lastFrame = null;
+        _items.Clear();
     }
 
     private TextItem CreateTextItem(OverlayTextItem item)
     {
         var window = _window ?? throw new InvalidOperationException("Overlay window is not initialized.");
         var targetRect = OverlayTextLayoutCalculator.ClipToBounds(
-            window.ScreenPhysicalToLocalDip(item.TargetRect),
+            window.ScreenPhysicalToLocalDip(OverlaySourceGeometry.GetMaskBounds(item.TargetRect)),
             window.Width,
             window.Height);
         var x = targetRect.X;
@@ -94,7 +143,8 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
             targetRect.Width,
             targetRect.Height,
             maxWidth,
-            Math.Clamp(fontRect.Height * fontScale, MinFontSize, MaxFontSize),
+            Math.Clamp(OverlaySourceGeometry.FontSizeFromInkHeight(fontRect.Height) * fontScale,
+                MinFontSize, MaxFontSize),
             MinFontSize,
             HorizontalPadding,
             VerticalPadding,
@@ -177,6 +227,7 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
 
     private void ClearOnUi()
     {
+        _windowTimer.Stop();
         _lastFrame = null;
         _window?.Close();
         _window = null;

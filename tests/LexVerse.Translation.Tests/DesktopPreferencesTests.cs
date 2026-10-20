@@ -16,7 +16,7 @@ public sealed class DesktopPreferencesTests
         try
         {
             await File.WriteAllTextAsync(path, """
-                {"schemaVersion":1,"preferences":{"appLanguage":"vi","ocrMode":"comic","scanIntervalMs":750,"maxOcrFragments":24}}
+                {"schemaVersion":1,"preferences":{"appLanguage":"vi","ocrMode":"comic","scanIntervalMs":750,"maxOcrFragments":24,"showPopupBeforeTranslationFinishes":false}}
                 """, cancellationToken);
             using var service = new PersistentDesktopPreferencesService(path);
             Assert.Equal("vi", service.Current.AppLanguage);
@@ -26,6 +26,7 @@ public sealed class DesktopPreferencesTests
             await service.UpdateAsync(service.Current, cancellationToken);
             var json = await File.ReadAllTextAsync(path, cancellationToken);
             Assert.DoesNotContain("maxOcrFragments", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("showPopupBeforeTranslationFinishes", json, StringComparison.Ordinal);
             using var reloaded = new PersistentDesktopPreferencesService(path);
             Assert.Equal(service.Current, reloaded.Current);
         }
@@ -55,7 +56,6 @@ public sealed class DesktopPreferencesTests
             ClosePopupOnOutsideClick = false,
             AllowPopupDragging = false,
             ShowOcrDebugBoxes = true,
-            ShowPopupBeforeTranslationFinishes = true,
             ScanIntervalMs = 750,
             OverlayOpacityPercent = 72,
             OverlayFontScalePercent = 125,

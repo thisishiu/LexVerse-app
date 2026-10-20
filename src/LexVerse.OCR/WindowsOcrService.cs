@@ -333,11 +333,11 @@ public sealed class WindowsOcrService : IOcrService
 
     private static BoundingBox ToBoundingBox(Windows.Foundation.Rect rect)
     {
-        return new BoundingBox(
-            (int)Math.Round(rect.X),
-            (int)Math.Round(rect.Y),
-            (int)Math.Round(rect.Width),
-            (int)Math.Round(rect.Height));
+        var left = (int)Math.Floor(rect.X);
+        var top = (int)Math.Floor(rect.Y);
+        return new BoundingBox(left, top,
+            (int)Math.Ceiling(rect.X + rect.Width) - left,
+            (int)Math.Ceiling(rect.Y + rect.Height) - top);
     }
 
     private static double Median(IEnumerable<double> values)

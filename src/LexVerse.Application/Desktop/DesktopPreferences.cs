@@ -29,7 +29,6 @@ public sealed record DesktopPreferences
 
     public bool ShowOcrDebugBoxes { get; init; }
 
-    public bool ShowPopupBeforeTranslationFinishes { get; init; }
 
     public int ScanIntervalMs { get; init; } = 500;
 

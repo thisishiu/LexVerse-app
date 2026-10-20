@@ -7,4 +7,5 @@ public sealed record OverlayRenderFrame(
     PipelineTrace? Trace,
     long GeometryVersion,
     DateTimeOffset Timestamp,
-    double RotationAngle = 0);
+    double RotationAngle = 0,
+    LexVerse.Core.Capture.WindowCaptureTarget? WindowTarget = null);

@@ -10,7 +10,8 @@ public sealed class PopupTranslationUseCase(
     FeatureGate featureGate,
     ISelectedTextReader selectedTextReader,
     ITextTranslator translator,
-    IOperationalTelemetry? telemetry = null)
+    IOperationalTelemetry? telemetry = null,
+    IPopupDocumentTranslator? documentTranslator = null)
 {
     private readonly FeatureGate _featureGate =
         featureGate ?? throw new ArgumentNullException(nameof(featureGate));
@@ -20,15 +21,28 @@ public sealed class PopupTranslationUseCase(
         translator ?? throw new ArgumentNullException(nameof(translator));
     private readonly IOperationalTelemetry _telemetry = telemetry ?? NullOperationalTelemetry.Instance;
 
+    public Task<PopupTranslationResult> TranslateImageAsync(byte[] png, PopupTranslationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(png);
+        ArgumentNullException.ThrowIfNull(request);
+        return ExecuteMeasuredAsync(PopupInputKind.Image, async token =>
+        {
+            var service = documentTranslator ?? throw new InvalidOperationException("Popup image translation is unavailable.");
+            return PopupTranslationResult.FromDocument(await service.TranslateAsync(null, png, request, token), request);
+        }, cancellationToken);
+    }
+
     public async Task<PopupTranslationResult> TranslateSelectedTextAsync(
         PopupTranslationRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action? inputReady = null)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         return await ExecuteMeasuredAsync(
             PopupInputKind.SelectedText,
-            token => ReadAndTranslateSelectedTextAsync(request, token),
+            token => ReadAndTranslateSelectedTextAsync(request, token, inputReady),
             cancellationToken);
     }
 
@@ -48,9 +62,13 @@ public sealed class PopupTranslationUseCase(
 
     private async Task<PopupTranslationResult> ReadAndTranslateSelectedTextAsync(
         PopupTranslationRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action? inputReady)
     {
         var sourceText = await _selectedTextReader.ReadSelectedTextAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!string.IsNullOrWhiteSpace(sourceText)) inputReady?.Invoke();
+        cancellationToken.ThrowIfCancellationRequested();
         return string.IsNullOrWhiteSpace(sourceText)
             ? PopupTranslationResult.NoSelection
             : await TranslateCoreAsync(sourceText, request, cancellationToken);
@@ -119,6 +137,9 @@ public sealed class PopupTranslationUseCase(
         CancellationToken cancellationToken)
     {
         sourceText = sourceText.Trim();
+        if (documentTranslator is not null)
+            return PopupTranslationResult.FromDocument(
+                await documentTranslator.TranslateAsync(sourceText, null, request, cancellationToken), request);
         var translation = await _translator.TranslateAsync(
             sourceText,
             request.TargetLanguage,

@@ -11,6 +11,7 @@ namespace LexVerse.Core.Product;
 /// </summary>
 public static class ProductFeatures
 {
+    public static FeatureKey WindowTranslation { get; } = new("translation.window");
     public static FeatureKey PopupTranslation { get; } = new("translation.popup");
 
     public static FeatureKey RegionTranslation { get; } = new("translation.region");

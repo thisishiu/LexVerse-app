@@ -31,7 +31,6 @@ const basePreview: DesktopSnapshot = {
     closePopupOnOutsideClick: true,
     allowPopupDragging: true,
     showOcrDebugBoxes: false,
-    showPopupBeforeTranslationFinishes: false,
     scanIntervalMs: 500,
     overlayOpacityPercent: 85,
     overlayFontScalePercent: 100,

@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <None Include="..\..\..\lexverse-server\test\fixtures\node-entitlement.json" Link="Fixtures\node-entitlement.json" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\..\src\LexVerse.App\WindowPreviewCapture.cs" Link="WindowPreviewCapture.cs" />
   </ItemGroup>
 
   <ItemGroup>

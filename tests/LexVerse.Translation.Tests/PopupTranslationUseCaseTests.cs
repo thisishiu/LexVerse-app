@@ -10,6 +10,60 @@ namespace LexVerse.Translation.Tests;
 
 public sealed class PopupTranslationUseCaseTests
 {
+
+    [Fact]
+    public async Task ClosingPopupWhenInputIsReady_DoesNotDispatchTranslation()
+    {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var translator = new RecordingTranslator();
+        var useCase = CreateUseCase(allowed: true, new StubSelectedTextReader("selected text"), translator);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            useCase.TranslateSelectedTextAsync(new PopupTranslationRequest("vi"), cancellation.Token, cancellation.Cancel));
+        Assert.Equal(0, translator.CallCount);
+    }
+
+    [Fact]
+    public async Task DocumentPopup_UsesSameStructuredServiceForTextAndImage()
+    {
+        var provider = new RecordingDocumentTranslator();
+        var gate = new FeatureGate(new FixedAccessService(FeatureAccessDecision.Allowed(ProductFeatures.PopupTranslation, null)));
+        var legacy = new RecordingTranslator();
+        var useCase = new PopupTranslationUseCase(gate, new StubSelectedTextReader("input"), legacy, documentTranslator: provider);
+        var ready = false;
+        var request = new PopupTranslationRequest("vi");
+        var text = await useCase.TranslateSelectedTextAsync(request, TestContext.Current.CancellationToken, () => { Assert.Null(provider.Text); ready = true; });
+        Assert.True(ready);
+        Assert.Equal("# Translation\n$x^2$", text.Translation?.TranslatedText);
+        Assert.Single(text.Terms);
+        Assert.Equal("input", provider.Text);
+        var image = await useCase.TranslateImageAsync([1, 2, 3], request, TestContext.Current.CancellationToken);
+        Assert.Equal(new byte[] { 1, 2, 3 }, provider.Png);
+        Assert.Null(provider.Text);
+        Assert.Single(image.Terms);
+        Assert.Equal(0, legacy.CallCount);
+    }
+
+    [Fact]
+    public async Task DocumentImage_DeniedAccessDoesNotDispatch()
+    {
+        var provider = new RecordingDocumentTranslator();
+        var gate = new FeatureGate(new FixedAccessService(FeatureAccessDecision.Denied(ProductFeatures.PopupTranslation, FeatureAccessDenialReason.NotEntitled)));
+        var useCase = new PopupTranslationUseCase(gate, new StubSelectedTextReader(null), new RecordingTranslator(), documentTranslator: provider);
+        await Assert.ThrowsAsync<FeatureAccessDeniedException>(() => useCase.TranslateImageAsync([1], new PopupTranslationRequest("vi"), TestContext.Current.CancellationToken));
+        Assert.Null(provider.Png);
+    }
+
+    private sealed class RecordingDocumentTranslator : IPopupDocumentTranslator
+    {
+        public string? Text { get; private set; }
+        public byte[]? Png { get; private set; }
+        public Task<PopupDocument> TranslateAsync(string? text, byte[]? png, PopupTranslationRequest request, CancellationToken cancellationToken = default)
+        {
+            Text = text; Png = png;
+            return Task.FromResult(new PopupDocument(text ?? "Image source", "# Translation\n$x^2$", [new PopupTerm("x", "x", "Variable")]));
+        }
+    }
+
     [Fact]
     public async Task TranslateSelectedText_GatesThenReadsAndTranslatesSelection()
     {

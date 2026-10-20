@@ -13,6 +13,64 @@ namespace LexVerse.Translation.Tests;
 public sealed class FixedOverlayBoxTests
 {
     [Fact]
+    public void RenderBeforeAndAfterSourceHeightCorrection()
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                const string text = "Tiếng Việt có dấu Ắ ễ ộ ự g";
+                var items = new ObservableCollection<TextItem>();
+                var source = new LexVerse.Core.Geometry.ScreenRect(8, 8, 300, 50);
+                var mask = OverlaySourceGeometry.GetMaskBounds(source);
+                var preferred = OverlaySourceGeometry.FontSizeFromInkHeight(20);
+                foreach (var after in new[] { false, true })
+                {
+                    var rect = after ? mask : source;
+                    var layout = OverlayTextLayoutCalculator.Calculate(text, rect.Width, rect.Height,
+                        rect.Width, after ? preferred : 20, 8, 4, 2, 1);
+                    items.Add(new TextItem { Text = text, X = rect.X, Y = rect.Y + (after ? 70 : 0),
+                        Width = layout.Width, Height = layout.Height, FontSize = layout.FontSize });
+                }
+                Assert.True(items[1].FontSize > items[0].FontSize);
+                var window = new LexVerse.Overlay.MainWindow(items);
+                try
+                {
+                    var root = (FrameworkElement)window.Content;
+                    root.Measure(new Size(330, 140));
+                    root.Arrange(new Rect(0, 0, 330, 140));
+                    root.UpdateLayout();
+                    foreach (var border in Descendants(root).OfType<Border>().Where(b => b.DataContext is TextItem))
+                    {
+                        var block = Assert.IsType<TextBlock>(border.Child);
+                        var width = border.ActualWidth - border.Padding.Left - border.Padding.Right
+                            - border.BorderThickness.Left - border.BorderThickness.Right;
+                        var height = border.ActualHeight - border.Padding.Top - border.Padding.Bottom
+                            - border.BorderThickness.Top - border.BorderThickness.Bottom;
+                        block.Measure(new Size(width, double.PositiveInfinity));
+                        Assert.True(block.DesiredSize.Height <= height + 0.01);
+                        Assert.True(block.DesiredSize.Width <= width + 0.01);
+                    }
+                    var bitmap = new RenderTargetBitmap(330, 140, 96, 96, PixelFormats.Pbgra32);
+                    bitmap.Render(root);
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                    using var output = System.IO.File.Create(System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                        "LexVerse-overlay-before-after.png"));
+                    encoder.Save(output);
+                }
+                finally { window.Close(); }
+            }
+            catch (Exception error) { failure = error; }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(30)), "WPF render timed out");
+        if (failure is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+
+    [Fact]
     public void KeepsPreferredFontWhenItFitsAndOnEmptyText()
     {
         Assert.Equal(20, Calculate("Short", 200, 50).FontSize);
@@ -65,6 +123,7 @@ public sealed class FixedOverlayBoxTests
     [InlineData(1)]
     [InlineData(1.25)]
     [InlineData(1.5)]
+    [InlineData(2)]
     public void ActualTemplateContainsTextAndPreservesAdjacentBoxBounds(double dpi)
     {
         Exception? failure = null;

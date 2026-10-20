@@ -18,6 +18,7 @@ namespace LexVerse.Overlay
         private ScreenRect? _pendingPhysicalBounds;
         private double _boundsDpiScaleX = 1;
         private double _boundsDpiScaleY = 1;
+        public IntPtr TargetWindow { get; set; }
 
         public MainWindow()
             : this(new ObservableCollection<TextItem>())
@@ -130,13 +131,49 @@ namespace LexVerse.Overlay
 
             _ = SetWindowPos(
                 hwnd,
-                HWND_TOPMOST,
+                TargetWindow == IntPtr.Zero ? HWND_TOPMOST : new IntPtr(-2),
                 (int)Math.Round(physicalBounds.X),
                 (int)Math.Round(physicalBounds.Y),
                 (int)Math.Round(physicalBounds.Width),
                 (int)Math.Round(physicalBounds.Height),
-                SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+                SWP_NOACTIVATE | SWP_NOOWNERZORDER | (TargetWindow == IntPtr.Zero ? 0u : 0x0004u));
         }
+
+        /// <summary>Keep the overlay immediately above its target, with occluded pixels removed.</summary>
+        public void UpdateWindowLayer(ScreenRect bounds)
+        {
+            if (TargetWindow == IntPtr.Zero || !IsLoaded) return;
+            var hwnd = new WindowInteropHelper(this).Handle;
+            var region = CreateRectRgn(0, 0, (int)Math.Ceiling(bounds.Width), (int)Math.Ceiling(bounds.Height));
+            var previous = GetWindow(TargetWindow, 3); // GW_HWNDPREV
+            var insertAfter = IntPtr.Zero;
+            for (var other = previous; other != IntPtr.Zero; other = GetWindow(other, 3))
+            {
+                if (other == hwnd) continue;
+                if (insertAfter == IntPtr.Zero) insertAfter = other;
+                if (!IsWindowVisible(other) || IsIconic(other)) continue;
+                if (DwmGetWindowAttribute(other, 14, out var cloaked, sizeof(int)) == 0 && cloaked != 0) continue;
+                if (!GetWindowRect(other, out var rect)) continue;
+                var cut = CreateRectRgn(rect.Left - (int)bounds.X, rect.Top - (int)bounds.Y,
+                    rect.Right - (int)bounds.X, rect.Bottom - (int)bounds.Y);
+                _ = CombineRgn(region, region, cut, 4); // RGN_DIFF
+                _ = DeleteObject(cut);
+            }
+            if (SetWindowRgn(hwnd, region, true) == 0) _ = DeleteObject(region);
+            _ = SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0, 0x0001 | 0x0002 | SWP_NOACTIVATE);
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeRect { public int Left, Top, Right, Bottom; }
+        [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+        [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+        [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
+        [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
+        [DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
+        [DllImport("gdi32.dll")] private static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+        [DllImport("gdi32.dll")] private static extern int CombineRgn(IntPtr destination, IntPtr first, IntPtr second, int mode);
+        [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr handle);
+        [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);
 
         private const int GWL_EXSTYLE = -20;
         private const int WS_EX_TRANSPARENT = 0x20;

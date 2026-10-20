@@ -4,6 +4,7 @@ import { routes, routeIds } from "./app/routes";
 import type { AppRoute } from "./app/route-types";
 import { useDesktopApp } from "./app/useDesktopApp";
 import { StartupIntro } from "./app/StartupIntro";
+import { HelpMode } from "./components/HelpMode";
 import "./styles.css";
 import { isTranslationError, translationErrorMessage } from "./translationErrors";
 
@@ -30,6 +31,9 @@ function errorMessage(error: string, vietnamese: boolean) {
 
 export function App() {
   const app = useDesktopApp();
+  const notifyHelpMode = useCallback((active: boolean) => {
+    void app.bridge.command("app.setExplanationMode", { active }).catch(() => {});
+  }, [app.bridge]);
   const [introActive, setIntroActive] = useState(() =>
     Boolean(window.chrome?.webview) || new URLSearchParams(window.location.search).has("intro"));
   const finishIntro = useCallback(() => {
@@ -59,9 +63,9 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (introActive || event.repeat || !app.snapshot || app.busy) return;
+      if (introActive || document.documentElement.dataset.helpActive || event.repeat || !app.snapshot || app.busy) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
-      if (target?.closest("[data-shortcut-capture]") ||
+      if (target?.closest("[data-shortcut-capture], dialog[open]") ||
           target?.matches("input, textarea, select, [contenteditable='true']")) return;
 
       const pressed = shortcutFromKeyboardEvent(event);
@@ -104,7 +108,7 @@ export function App() {
     <div className="app-shell" inert={introActive}>
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark" aria-hidden="true">Lx</div>
+          <img className="brand-mark" src="/branding/logo.png" alt="" aria-hidden="true" />
           <div className="brand-copy">
             <strong>LexVerse</strong>
 
@@ -171,7 +175,7 @@ export function App() {
         )}
 
         <div className="page-viewport">
-          <Page app={app} navigate={navigate} />
+          <HelpMode key={route} vietnamese={isVietnamese} onActiveChange={notifyHelpMode}><Page app={app} navigate={navigate} /></HelpMode>
         </div>
 
         <footer className="app-statusbar">

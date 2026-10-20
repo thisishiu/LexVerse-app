@@ -194,6 +194,7 @@ public sealed class RealtimeTranslationCoordinator : IAsyncDisposable
                     RecordFrame(run.CorrelationId, request, update, run.FrameCount);
                 }
                 await DelayUntilNextCaptureAsync(
+                    run.Session,
                     request.Options.OcrInterval,
                     iterationTimer.Elapsed,
                     cancellationToken);
@@ -201,6 +202,10 @@ public sealed class RealtimeTranslationCoordinator : IAsyncDisposable
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+        }
+        catch (WindowTargetClosedException)
+        {
+            SetState(RealtimeCoordinatorState.Stopped);
         }
         catch (Exception exception)
         {
@@ -302,6 +307,7 @@ public sealed class RealtimeTranslationCoordinator : IAsyncDisposable
         });
 
     private static async Task DelayUntilNextCaptureAsync(
+        IRealtimePipelineSession session,
         TimeSpan interval,
         TimeSpan elapsed,
         CancellationToken cancellationToken)
@@ -309,7 +315,7 @@ public sealed class RealtimeTranslationCoordinator : IAsyncDisposable
         var remaining = interval - elapsed;
         if (remaining > TimeSpan.FromMilliseconds(10))
         {
-            await Task.Delay(remaining, cancellationToken);
+            await session.WaitForNextCaptureAsync(remaining, cancellationToken);
         }
         else
         {

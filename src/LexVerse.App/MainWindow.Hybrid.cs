@@ -12,6 +12,11 @@ namespace LexVerse.App;
 
 public partial class MainWindow
 {
+    private readonly LexVerse.Infrastructure.Windows.WindowTargetRegistry _windowTargets = new();
+    private string? _selectedWindowName;
+    private sealed record WindowStartPayload(string WindowId);
+    private sealed record ExplanationModePayload(bool Active);
+    private bool _desktopExplanationModeActive;
     private const string DesktopUiHostName = "app.lexverse.local";
     private const string DesktopUiOrigin = "https://app.lexverse.local";
     private readonly SemaphoreSlim _desktopCommandGate = new(1, 1);
@@ -80,7 +85,9 @@ public partial class MainWindow
                 CoreWebView2HostResourceAccessKind.DenyCors);
             core.WebMessageReceived += WebUi_WebMessageReceived;
             core.NavigationCompleted += WebUi_NavigationCompleted;
-            core.Navigate($"{DesktopUiOrigin}/index.html");
+            var uiVersion = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                await File.ReadAllBytesAsync(Path.Combine(assetsPath, "index.html"), token)));
+            core.Navigate($"{DesktopUiOrigin}/index.html?v={uiVersion}");
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception exception)
@@ -160,6 +167,26 @@ public partial class MainWindow
         var lifetime = _desktopUiLifetime;
         if (lifetime is null || lifetime.IsCancellationRequested)
         {
+            return;
+        }
+
+        if (command.Type == "app.setExplanationMode")
+        {
+            try
+            {
+                _desktopExplanationModeActive = DesktopBridgeProtocol.DeserializePayload<ExplanationModePayload>(command.Payload).Active;
+                PostDesktopResult(command.Id, true);
+            }
+            catch (Exception exception) when (exception is JsonException or DesktopBridgePayloadException)
+            {
+                PostDesktopResult(command.Id, false, errorCode: "invalid-payload");
+            }
+            return;
+        }
+
+        if (command.Type is "realtime.getWindowPreviews" or "realtime.cancelWindowPreviews")
+        {
+            await HandleWindowPreviewsAsync(command, lifetime.Token);
             return;
         }
 
@@ -249,6 +276,24 @@ public partial class MainWindow
             case "realtime.start":
                 await StartRegionRealtimeAsync();
                 return null;
+
+            case "realtime.listWindows":
+                CancelWindowPreviews();
+                return _windowTargets.Refresh();
+
+            case "realtime.startWindow":
+            {
+                var payload = DesktopBridgeProtocol.DeserializePayload<WindowStartPayload>(command.Payload);
+                LexVerse.Core.Capture.WindowCaptureTarget target;
+                try { target = _windowTargets.Resolve(payload.WindowId); }
+                catch (InvalidOperationException) { throw new DesktopBridgePayloadException("window-unavailable"); }
+                var bounds = new LexVerse.Infrastructure.Windows.Win32WindowTracker().GetSnapshot(target.Hwnd).WindowRect;
+                _realtimeStartErrorCode = null;
+                await _realtimeModule.Coordinator.StartAsync(new LexVerse.Application.Realtime.RealtimeTranslationRequest(
+                    LexVerse.Application.Realtime.RealtimeCaptureKind.Window, bounds, GetOcrLanguageTag(), CreateRealtimeOptions(), target));
+                _selectedWindowName = target.DisplayName;
+                return null;
+            }
 
             case "realtime.startFullScreen":
                 await StartFullScreenRealtimeAsync();
@@ -375,8 +420,6 @@ public partial class MainWindow
                 ?? current.ClosePopupOnOutsideClick,
             AllowPopupDragging = payload.AllowPopupDragging ?? current.AllowPopupDragging,
             ShowOcrDebugBoxes = payload.ShowOcrDebugBoxes ?? current.ShowOcrDebugBoxes,
-            ShowPopupBeforeTranslationFinishes = payload.ShowPopupBeforeTranslationFinishes
-                ?? current.ShowPopupBeforeTranslationFinishes,
             ScanIntervalMs = payload.ScanIntervalMs ?? current.ScanIntervalMs,
             OverlayOpacityPercent = payload.OverlayOpacityPercent ?? current.OverlayOpacityPercent,
             OverlayFontScalePercent = payload.OverlayFontScalePercent ?? current.OverlayFontScalePercent,
@@ -470,7 +513,6 @@ public partial class MainWindow
                 closePopupOnOutsideClick = preferences.ClosePopupOnOutsideClick,
                 allowPopupDragging = preferences.AllowPopupDragging,
                 showOcrDebugBoxes = preferences.ShowOcrDebugBoxes,
-                showPopupBeforeTranslationFinishes = preferences.ShowPopupBeforeTranslationFinishes,
                 scanIntervalMs = preferences.ScanIntervalMs,
                 overlayOpacityPercent = preferences.OverlayOpacityPercent,
                 overlayFontScalePercent = preferences.OverlayFontScalePercent,
@@ -497,6 +539,8 @@ public partial class MainWindow
                 errorCode = _realtimeStartErrorCode ?? realtime.ErrorCode,
                 canStartRegion = CanStartRegion,
                 canStartFullScreen = CanStartFullScreen,
+                canStartWindow = _windowAccessAllowed && !_isSelectingRegion,
+                selectedWindowName = realtime.CaptureKind == LexVerse.Application.Realtime.RealtimeCaptureKind.Window ? _selectedWindowName : null,
                 canStop = IsRealtimeRunning,
                 lastFrameMilliseconds = _lastFrameMilliseconds,
                 performanceBudgetExceeded = _lastFrameBudgetExceeded
@@ -566,6 +610,8 @@ public partial class MainWindow
 
     private void ShutdownHybridUiHost()
     {
+        _desktopExplanationModeActive = false;
+        CancelWindowPreviews();
         _desktopUiReady = false;
         _startupTimer?.Stop();
         _startupTimer = null;
@@ -606,7 +652,6 @@ public partial class MainWindow
         bool? ClosePopupOnOutsideClick = null,
         bool? AllowPopupDragging = null,
         bool? ShowOcrDebugBoxes = null,
-        bool? ShowPopupBeforeTranslationFinishes = null,
         int? ScanIntervalMs = null,
         int? OverlayOpacityPercent = null,
         int? OverlayFontScalePercent = null,

@@ -32,6 +32,11 @@ public static class TranslationFailure
 
     public static string Message(string code, bool vi) => code switch
     {
+        "popup-not-configured" => vi ? "Máy chủ chưa cấu hình AWS Bedrock cho popup." : "AWS Bedrock popup translation is not configured on the server.",
+        "popup-no-text" => vi ? "Không tìm thấy chữ đọc được trong vùng ảnh đã chọn." : "No readable text was found in the selected image.",
+        "popup-invalid-response" => vi ? "LLM trả về kết quả không đúng định dạng. Vui lòng thử lại." : "The LLM returned an invalid translation response. Please try again.",
+        "popup-output-incomplete" => vi ? "Bản dịch chưa hoàn tất. Hãy chọn vùng nhỏ hơn hoặc tăng giới hạn đầu ra trên máy chủ." : "The translation is incomplete. Select a smaller region or increase the server output limit.",
+        "translation-too-large" => vi ? "Nội dung quá lớn. Hãy chọn vùng ảnh hoặc đoạn văn nhỏ hơn." : "The content is too large. Select a smaller image region or text passage.",
         "translation-network-unavailable" => vi ? "Không kết nối được máy chủ dịch. Kiểm tra mạng rồi thử lại." : "Cannot connect to the translation server. Check your connection and try again.",
         "translation-timeout" => vi ? "Dịch quá thời gian chờ. Vui lòng thử lại sau." : "Translation timed out. Please try again later.",
         "translation-quota-exceeded" => vi ? "Đã hết quota dịch. Kiểm tra gói hoặc chờ kỳ tiếp theo." : "Your translation quota is exhausted. Check your plan or wait for the next period.",

@@ -15,6 +15,23 @@ namespace LexVerse.Translation.Tests;
 public sealed class RealtimeTranslationCoordinatorTests
 {
     [Fact]
+    public async Task ClosedWindowStopsAndReleasesCapture()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var session = new FakeSession(failure: new WindowTargetClosedException());
+        var output = new FakeOutput();
+        await using var coordinator = CreateCoordinator(true, new FakeSessionFactory(session), output);
+        var request = new RealtimeTranslationRequest(RealtimeCaptureKind.Window,
+            new ScreenRect(0, 0, 800, 600), "en-US", RealtimeTranslationOptions.Document,
+            new WindowCaptureTarget(new IntPtr(123), 10, 20, "Editor"));
+        await coordinator.StartAsync(request, token);
+        await session.DisposedSignal.Task.WaitAsync(token);
+        Assert.Equal(RealtimeCoordinatorStatus.Stopped, coordinator.State.Status);
+        Assert.Null(coordinator.State.ErrorCode);
+        Assert.True(output.ClearCount >= 1);
+    }
+
+    [Fact]
     public async Task FailureKeepsCauseAndRestartClearsIt()
     {
         var token = TestContext.Current.CancellationToken;
