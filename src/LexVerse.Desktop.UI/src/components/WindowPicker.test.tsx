@@ -106,7 +106,7 @@ it("Esc leaves explanation mode before closing the modal", async () => {
   const close = vi.fn();
   render(<WindowPicker vietnamese={false} list={async () => entries} start={vi.fn()} onClose={close} />);
   await screen.findByRole("radio", { name: "editor Document" });
-  const toggle = screen.getByRole("button", { name: "Explanation mode" });
+  const toggle = screen.getByRole("button", { name: "User guide" });
   fireEvent.click(toggle);
   fireEvent.keyDown(toggle, { key: "Escape" });
   expect(close).not.toHaveBeenCalled();

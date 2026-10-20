@@ -9,3 +9,5 @@ vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(() =
 // jsdom does not implement the native dialog lifecycle or modal focus handling.
 HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); this.querySelector<HTMLElement>("[autofocus]")?.focus(); };
 HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+
+vi.mock("lottie-web/build/player/lottie_light", () => ({ default: { loadAnimation: vi.fn(() => ({ destroy() {}, play() {}, goToAndStop() {} })) } }));

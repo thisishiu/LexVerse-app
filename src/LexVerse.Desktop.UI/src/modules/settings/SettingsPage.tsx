@@ -1,5 +1,5 @@
-import { OptionHelp } from "../../components/OptionHelp";
-import { useHelpMode } from "../../components/HelpMode";
+import { GuideOption } from "../../components/GuideOption";
+
 import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
 import {
   CircleHelp,
@@ -56,8 +56,8 @@ const defaultSettings: DesktopSettings = {
 export function SettingsPage({ app }: RouteProps) {
   const { snapshot, bridge, busy, run } = app;
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
-  const { exit: exitHelp } = useHelpMode();
-  useEffect(() => { exitHelp(); }, [activeTab, exitHelp]);
+
+
   const [baseline, setBaseline] = useState<DesktopSettings>(() => cloneSettings(defaultSettings));
   const [draft, setDraft] = useState<DesktopSettings>(() => cloneSettings(defaultSettings));
   const [capturing, setCapturing] = useState<ShortcutName>();
@@ -136,7 +136,7 @@ export function SettingsPage({ app }: RouteProps) {
           >
             <Save size={17} /> {busy === t("Saving settings", "Đang lưu cài đặt") ? t("Saving...", "Đang lưu...") : t("Save changes", "Lưu thay đổi")}
           </button>
-          <OptionHelp label={t("Save changes", "Lưu thay đổi")} />
+          <GuideOption label={t("Save changes", "Lưu thay đổi")} />
         </div>
       </header>
 
@@ -162,7 +162,7 @@ export function SettingsPage({ app }: RouteProps) {
               <SettingsTitle icon={SlidersHorizontal} title={t("General", "Cài đặt chung")} />
 
               <div className="settings-form-section">
-                <div className="settings-section-label">{t("Display language", "Ngôn ngữ hiển thị")} <OptionHelp label={t("Display language", "Ngôn ngữ hiển thị")} /></div>
+                <div className="settings-section-label">{t("Display language", "Ngôn ngữ hiển thị")} <GuideOption label={t("Display language", "Ngôn ngữ hiển thị")} /></div>
                 <div className="segmented-control compact-segments" role="group" aria-label={t("Display language", "Ngôn ngữ hiển thị")}>
                   <button type="button" className={draft.appLanguage === "en" ? "segment-active" : ""} onClick={() => update("appLanguage", "en")}>English</button>
                   <button type="button" className={draft.appLanguage === "vi" ? "segment-active" : ""} onClick={() => update("appLanguage", "vi")}>Tiếng Việt</button>
@@ -173,13 +173,13 @@ export function SettingsPage({ app }: RouteProps) {
                 <div className="settings-section-label">{t("Default language pair", "Cặp ngôn ngữ mặc định")}</div>
                 <div className="default-language-grid">
                   <div className="language-field">
-                    <span><label htmlFor="default-source-language">{t("Source language", "Ngôn ngữ nguồn")}</label> <OptionHelp label={t("Source language", "Ngôn ngữ nguồn")} /></span>
+                    <span><label htmlFor="default-source-language">{t("Source language", "Ngôn ngữ nguồn")}</label> <GuideOption label={t("Source language", "Ngôn ngữ nguồn")} /></span>
                     <select id="default-source-language" value={draft.sourceLanguage} onChange={(event) => update("sourceLanguage", event.target.value)}>
                       {languages.map(([value]) => <option key={value} value={value}>{languageName(value, isVietnamese)}</option>)}
                     </select>
                   </div>
                   <div className="language-field">
-                    <span><label htmlFor="default-target-language">{t("Target language", "Ngôn ngữ đích")}</label> <OptionHelp label={t("Target language", "Ngôn ngữ đích")} /></span>
+                    <span><label htmlFor="default-target-language">{t("Target language", "Ngôn ngữ đích")}</label> <GuideOption label={t("Target language", "Ngôn ngữ đích")} /></span>
                     <select id="default-target-language" value={draft.targetLanguage} onChange={(event) => update("targetLanguage", event.target.value)}>
                       {languages.filter(([value]) => value !== "auto").map(([value]) => (
                         <option key={value} value={value}>{languageName(value, isVietnamese)}</option>
@@ -214,7 +214,7 @@ export function SettingsPage({ app }: RouteProps) {
                 <span>{t("OCR on device", "OCR trên thiết bị")}</span>
                 <span className="action-with-help"><button type="button" className="button button-quiet" onClick={() => void run(t("Opening help", "Đang mở trợ giúp"), () => bridge.command("external.openHelp"))}>
                   <CircleHelp size={16} /> {t("Help and source", "Trợ giúp và mã nguồn")}
-                </button><OptionHelp label={t("Help and source", "Trợ giúp và mã nguồn")} /></span>
+                </button><GuideOption label={t("Help and source", "Trợ giúp và mã nguồn")} /></span>
               </div>
             </div>
           )}
@@ -225,7 +225,7 @@ export function SettingsPage({ app }: RouteProps) {
 
               <div className="settings-form-section form-section-grid">
                 <div className="field-stack">
-                  <span><label htmlFor="ignored-terms">{t("Ignored terms", "Từ bỏ qua")}</label> <OptionHelp label={t("Ignored terms", "Từ bỏ qua")} /></span>
+                  <span><label htmlFor="ignored-terms">{t("Ignored terms", "Từ bỏ qua")}</label> <GuideOption label={t("Ignored terms", "Từ bỏ qua")} /></span>
                   <textarea
                     id="ignored-terms"
                     value={draft.ignoredTerms}
@@ -236,7 +236,7 @@ export function SettingsPage({ app }: RouteProps) {
                   />
                 </div>
                 <div className="field-stack">
-                  <span><label htmlFor="translation-instruction">{t("Translation instruction", "Văn phong dịch")}</label> <OptionHelp label={t("Translation instruction", "Văn phong dịch")} /></span>
+                  <span><label htmlFor="translation-instruction">{t("Translation instruction", "Văn phong dịch")}</label> <GuideOption label={t("Translation instruction", "Văn phong dịch")} /></span>
                   <textarea
                     id="translation-instruction"
                     value={draft.translationInstruction}
@@ -267,7 +267,7 @@ export function SettingsPage({ app }: RouteProps) {
 
               <div className="settings-form-section realtime-options-grid">
                 <div className="palette-setting">
-                  <span>{t("Overlay palette", "Bảng màu lớp phủ")} <OptionHelp label={t("Overlay palette", "Bảng màu lớp phủ")} /></span>
+                  <span>{t("Overlay palette", "Bảng màu lớp phủ")} <GuideOption label={t("Overlay palette", "Bảng màu lớp phủ")} /></span>
                   <div className="segmented-control palette-segments" role="group" aria-label={t("Overlay palette", "Bảng màu lớp phủ")}>
                     <button type="button" className={draft.useDarkOverlayBlocks ? "segment-active" : ""} onClick={() => update("useDarkOverlayBlocks", true)}><i className="palette-swatch swatch-dark" />{t("Dark", "Tối")}</button>
                     <button type="button" className={!draft.useDarkOverlayBlocks ? "segment-active" : ""} onClick={() => update("useDarkOverlayBlocks", false)}><i className="palette-swatch swatch-light" />{t("Light", "Sáng")}</button>
@@ -298,7 +298,7 @@ export function SettingsPage({ app }: RouteProps) {
               <div className="settings-footer-actions">
                 <span className="action-with-help"><button type="button" className="button button-secondary" onClick={() => setDraft((current) => current ? { ...current, shortcuts: { ...defaultShortcuts } } : current)}>
                   <RotateCcw size={16} /> {t("Restore shortcut defaults", "Khôi phục phím tắt mặc định")}
-                </button><OptionHelp label={t("Restore shortcut defaults", "Khôi phục phím tắt mặc định")} /></span>
+                </button><GuideOption label={t("Restore shortcut defaults", "Khôi phục phím tắt mặc định")} /></span>
               </div>
             </div>
           )}
@@ -328,7 +328,7 @@ function ToggleRow({ label, detail, inlineDetail = false, checked, disabled, onC
   const id = useId();
   return (
     <div className="setting-row">
-      <span><label htmlFor={id}><strong>{label}</strong></label> <OptionHelp label={label} />{detail && inlineDetail && <small>{detail}</small>}</span>
+      <span><label htmlFor={id}><strong>{label}</strong></label> <GuideOption label={label} />{detail && inlineDetail && <small>{detail}</small>}</span>
       <span className="toggle"><input id={id} aria-label={label} type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /><span aria-hidden="true" /></span>
     </div>
   );
@@ -346,7 +346,7 @@ function RangeSetting({ label, value, min, max, step, output, onChange }: {
   const id = useId();
   return (
     <div className="range-setting">
-      <span><strong><label htmlFor={id}>{label}</label> <OptionHelp label={label} /></strong><output htmlFor={id}>{output}</output></span>
+      <span><strong><label htmlFor={id}>{label}</label> <GuideOption label={label} /></strong><output htmlFor={id}>{output}</output></span>
       <input id={id} aria-label={label} type="range" value={value} min={min} max={max} step={step} onChange={(event) => onChange(event.target.valueAsNumber)} />
     </div>
   );
@@ -363,7 +363,7 @@ function ShortcutRow({ label, name, value, capturing, setCapturing, onKeyDown }:
   const isCapturing = capturing === name;
   return (
     <div className="shortcut-setting-row">
-      <span>{label} <OptionHelp label={label} /></span>
+      <span>{label} <GuideOption label={label} /></span>
       <button
         type="button"
         data-shortcut-capture="true"

@@ -1,4 +1,5 @@
 const entries: [string, string, string, string][] = [
+  ["Restore shortcut defaults", "Khôi phục phím tắt mặc định", "Restore the default key combinations, then press Save changes to apply.", "Đưa các phím tắt về mặc định, sau đó bấm Lưu thay đổi để áp dụng."],
   ["Review", "Xem lại", "Open Settings to review external text processing consent.", "Mở Cài đặt để xem lại quyền xử lý văn bản bên ngoài."],
   ["External processing is off", "Xử lý bên ngoài đang tắt", "Open Settings and enable external text processing before translating.", "Mở Cài đặt và bật xử lý văn bản bên ngoài trước khi dịch."],
   ["Text translator", "Dịch văn bản", "Enter or paste text, choose the languages, then press Translate.", "Nhập hoặc dán văn bản, chọn ngôn ngữ rồi bấm Dịch."],
@@ -49,7 +50,7 @@ const entries: [string, string, string, string][] = [
   ["Plans", "Các gói", "Choose an available plan. Access updates after payment confirmation.", "Chọn một gói khả dụng. Quyền sử dụng cập nhật sau khi xác nhận thanh toán."],
   ["LexVerse account", "Tài khoản LexVerse", "Sign in to manage your account and purchased access.", "Đăng nhập để quản lý tài khoản và quyền sử dụng đã mua."],
 ];
-export function helpText(label: string) {
+function originalText(label: string) {
   const entry = entries.find(([en, vi]) => en === label || vi === label);
   return entry ? entry[entry[1] === label ? 3 : 2] : label;
 }
@@ -69,4 +70,29 @@ export function helpId(label: string) {
   ];
   const canonical = [...entries, ...customLabels].find(([en, vi]) => en === label || vi === label)?.[0] ?? label;
   return Array.from(canonical).reduce((hash, char) => Math.imul(31, hash) + char.charCodeAt(0) | 0, 0).toString(36);
+}
+
+
+// Explicit outcomes for every boolean option; guidance never toggles it itself.
+const toggles: Record<string, [string, string, string, string]> = {
+  "External text processing": ["Văn bản đã chọn, nhập và OCR được phép gửi tới dịch vụ dịch.", "Không cho phép gửi văn bản tới dịch vụ dịch; các thao tác dịch cần quyền này sẽ bị chặn.", "Selected, typed and OCR text may be sent to the translation service.", "Text cannot be sent to the translation service; translation actions requiring consent are blocked."],
+  "Local performance diagnostics": ["Lưu chỉ số thời gian cục bộ, không chứa nội dung văn bản.", "Không thu thập chỉ số chẩn đoán cục bộ mới.", "Save local timing metrics without text content.", "Stop collecting new local diagnostic metrics."],
+  "Preserve acronyms and technical terms": ["Yêu cầu giữ nguyên chữ viết tắt và thuật ngữ kỹ thuật.", "Không áp dụng yêu cầu giữ nguyên bổ sung này.", "Ask the translator to preserve abbreviations and technical terms.", "Do not apply this additional preservation instruction."],
+  "Close popup on outside click": ["Bấm ngoài popup để đóng.", "Popup không tự đóng khi bấm ngoài; dùng nút đóng.", "Click outside the popup to dismiss it.", "Outside clicks leave the popup open; use its close button."],
+  "Allow popup dragging": ["Kéo thanh tiêu đề để di chuyển popup.", "Không thể kéo popup bằng thanh tiêu đề.", "Drag the title bar to move the popup.", "The popup cannot be moved by dragging its title bar."],
+  "Show OCR debug boxes": ["Hiện khung chữ gốc để kiểm tra nhận dạng và căn chỉnh.", "Ẩn các khung kiểm tra OCR.", "Show source text boundaries for recognition and alignment inspection.", "Hide OCR debug boundaries."]
+};
+export function helpText(label: string, supplied?: string) {
+  const entry = entries.find(([en, vi]) => en === label || vi === label);
+  const vi = entry ? entry[1] === label : /[À-ỹ]/.test(label);
+  const base = supplied ?? originalText(label);
+  const toggle = entry && toggles[entry[0]];
+  if (toggle) {
+    const immediate = entry[0] === "External text processing" || entry[0] === "Local performance diagnostics";
+    return vi ? `### Công dụng\n${base}\n\n### Khi bật\n${toggle[0]}\n\n### Khi tắt\n${toggle[1]}\n\n### Cách lưu\n${immediate ? "Lưu ngay sau khi được xác nhận. Không cần bấm Lưu thay đổi." : "Bấm **Lưu thay đổi** để áp dụng."}`
+      : `### Purpose\n${base}\n\n### When enabled\n${toggle[2]}\n\n### When disabled\n${toggle[3]}\n\n### Saving\n${immediate ? "Saves immediately after confirmation. No need to press Save changes." : "Press **Save changes** to apply."}`;
+  }
+  const settings = entry && ["Display language", "Source language", "Target language", "Ignored terms", "Translation instruction", "Scan interval", "Overlay opacity", "Text scale", "Overlay palette", "Popup translation", "Region translation", "Full-screen realtime", "Stop realtime", "Restore shortcut defaults"].includes(entry[0]);
+  return vi ? `### Công dụng và cách dùng\n${base}\n\n### Kết quả hoặc lưu ý\n${settings ? "Các thay đổi chỉ áp dụng sau khi bấm **Lưu thay đổi**." : "Trong chế độ hướng dẫn, thao tác này chỉ mở giải thích. Thoát hướng dẫn để sử dụng chức năng."}`
+    : `### Purpose and use\n${base}\n\n### Result or note\n${settings ? "Changes apply after pressing **Save changes**." : "In guide mode this opens an explanation only. Exit the guide to use the feature."}`;
 }

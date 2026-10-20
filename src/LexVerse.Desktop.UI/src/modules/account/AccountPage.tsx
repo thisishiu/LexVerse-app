@@ -1,5 +1,5 @@
-import { OptionHelp } from "../../components/OptionHelp";
-import { HelpTip } from "../../components/HelpTip";
+import { GuideOption } from "../../components/GuideOption";
+import { GuideTarget } from "../../components/GuideTarget";
 import {
   CheckCircle2,
   CircleDollarSign,
@@ -53,7 +53,7 @@ export function AccountPage({ app }: RouteProps) {
           <header className="panel-heading">
             <div className="panel-icon panel-icon-blue"><UserRound size={19} /></div>
             <div>
-              <div className="heading-with-help"><h3 id="identity-title">{t("LexVerse account", "Tài khoản LexVerse")}</h3><OptionHelp label={t("LexVerse account", "Tài khoản LexVerse")} /></div>
+              <div className="heading-with-help"><h3 id="identity-title">{t("LexVerse account", "Tài khoản LexVerse")}</h3><GuideOption label={t("LexVerse account", "Tài khoản LexVerse")} /></div>
             </div>
           </header>
 
@@ -82,7 +82,7 @@ export function AccountPage({ app }: RouteProps) {
                     onClick={() => void run(t("Opening sign in", "Đang mở đăng nhập"), () => bridge.command("account.signIn"))}
                   >
                     <LogIn size={17} /> {t("Sign in or create account", "Đăng nhập hoặc tạo tài khoản")} <ExternalLink size={14} />
-                  </button><OptionHelp label={t("Sign in or create account", "Đăng nhập hoặc tạo tài khoản")} /></span>
+                  </button><GuideOption label={t("Sign in or create account", "Đăng nhập hoặc tạo tài khoản")} /></span>
                 ) : signedIn ? (
                   <span className="action-with-help"><button
                     className="button button-secondary"
@@ -90,7 +90,7 @@ export function AccountPage({ app }: RouteProps) {
                     onClick={() => void run(t("Signing out", "Đang đăng xuất"), () => bridge.command("account.signOut"))}
                   >
                     <LogOut size={17} /> {t("Sign out", "Đăng xuất")}
-                  </button><OptionHelp label={t("Sign out", "Đăng xuất")} /></span>
+                  </button><GuideOption label={t("Sign out", "Đăng xuất")} /></span>
                 ) : null}
                 {serviceError && !signedIn && !authenticating && (
                   <span className="action-with-help"><button
@@ -99,7 +99,7 @@ export function AccountPage({ app }: RouteProps) {
                     onClick={() => void run(t("Retrying account", "Đang thử lại"), () => bridge.command("account.signIn"))}
                   >
                     <RefreshCw size={17} /> {t("Retry", "Thử lại")}
-                  </button><OptionHelp label={t("Retry", "Thử lại")} /></span>
+                  </button><GuideOption label={t("Retry", "Thử lại")} /></span>
                 )}
               </div>
               {authenticating && (
@@ -110,9 +110,9 @@ export function AccountPage({ app }: RouteProps) {
                       : t("Complete sign-in in your browser. LexVerse will update automatically. You have 15 minutes.", "Hoàn tất đăng nhập trên trình duyệt. LexVerse sẽ tự cập nhật. Bạn có 15 phút.")}</p>
                     {authentication?.error && <p role="alert">{t("Could not open the browser. Reopen it or copy the link.", "Chưa mở được trình duyệt. Hãy mở lại hoặc sao chép liên kết.")}</p>}
                     <div className="button-row">
-                      <span className="action-with-help"><button className="button button-secondary" disabled={disabled || !canRecoverSignIn} onClick={() => void run(t("Opening browser", "Đang mở trình duyệt"), () => bridge.command("account.reopenSignIn"))}>{t("Reopen browser", "Mở lại trình duyệt")}</button><OptionHelp label={t("Reopen browser", "Mở lại trình duyệt")} /></span>
-                      <span className="action-with-help"><button className="button button-secondary" disabled={disabled || !canRecoverSignIn} onClick={() => void run(t("Copying link", "Đang sao chép liên kết"), () => bridge.command("account.copySignInLink"))}>{t("Copy link", "Sao chép liên kết")}</button><OptionHelp label={t("Copy link", "Sao chép liên kết")} /></span>
-                      <span className="action-with-help"><button className="button button-quiet" disabled={disabled} onClick={() => void run(t("Canceling sign-in", "Đang hủy đăng nhập"), () => bridge.command("account.cancelSignIn"))}>{t("Cancel", "Hủy")}</button><OptionHelp label={t("Cancel", "Hủy")} /></span>
+                      <span className="action-with-help"><button className="button button-secondary" disabled={disabled || !canRecoverSignIn} onClick={() => void run(t("Opening browser", "Đang mở trình duyệt"), () => bridge.command("account.reopenSignIn"))}>{t("Reopen browser", "Mở lại trình duyệt")}</button><GuideOption label={t("Reopen browser", "Mở lại trình duyệt")} /></span>
+                      <span className="action-with-help"><button className="button button-secondary" disabled={disabled || !canRecoverSignIn} onClick={() => void run(t("Copying link", "Đang sao chép liên kết"), () => bridge.command("account.copySignInLink"))}>{t("Copy link", "Sao chép liên kết")}</button><GuideOption label={t("Copy link", "Sao chép liên kết")} /></span>
+                      <span className="action-with-help"><button className="button button-quiet" disabled={disabled} onClick={() => void run(t("Canceling sign-in", "Đang hủy đăng nhập"), () => bridge.command("account.cancelSignIn"))}>{t("Cancel", "Hủy")}</button><GuideOption label={t("Cancel", "Hủy")} /></span>
                     </div>
                   </div>
                 </div>
@@ -135,7 +135,7 @@ export function AccountPage({ app }: RouteProps) {
             <div className="panel-heading-copy">
               <div className="panel-icon panel-icon-orange"><CreditCard size={19} /></div>
               <div>
-                <div className="heading-with-help"><h3 id="plan-title">{t("Plans", "Các gói")}</h3><OptionHelp label={t("Plans", "Các gói")} /></div>
+                <div className="heading-with-help"><h3 id="plan-title">{t("Plans", "Các gói")}</h3><GuideOption label={t("Plans", "Các gói")} /></div>
               </div>
             </div>
             {signedIn && (
@@ -145,7 +145,7 @@ export function AccountPage({ app }: RouteProps) {
                 onClick={() => void run(t("Restoring access", "Đang đồng bộ quyền truy cập"), () => bridge.command("commerce.restore"))}
               >
                 <RefreshCw size={16} /> {t("Sync access", "Đồng bộ")}
-              </button><OptionHelp label={t("Sync access", "Đồng bộ")} /></span>
+              </button><GuideOption label={t("Sync access", "Đồng bộ")} /></span>
             )}
           </header>
 
@@ -168,7 +168,7 @@ export function AccountPage({ app }: RouteProps) {
                   <span className="offer-radio" aria-hidden="true" />
                   <strong>{offer.label}</strong>
                   {selectedOffer === offer.id && <CheckCircle2 size={18} aria-hidden="true" />}
-                </label><HelpTip id={`plan-${offer.id}`} label={`${t("Plan help", "Hướng dẫn gói")}: ${offer.label}`}>{t("Select this plan, then continue to checkout. Access updates after payment confirmation.", "Chọn gói này rồi tiếp tục thanh toán. Quyền sử dụng cập nhật sau khi xác nhận thanh toán.")}</HelpTip></div>
+                </label><GuideTarget id={`plan-${offer.id}`} label={`${t("Plan help", "Hướng dẫn gói")}: ${offer.label}`}>{t("Select this plan, then continue to checkout. Access updates after payment confirmation.", "Chọn gói này rồi tiếp tục thanh toán. Quyền sử dụng cập nhật sau khi xác nhận thanh toán.")}</GuideTarget></div>
               ))}
             </div>
           ) : (
@@ -182,7 +182,7 @@ export function AccountPage({ app }: RouteProps) {
             <div className="plan-footer">
               <div className="verified-payment">
                 <ShieldCheck size={17} />
-                <HelpTip label={t("Payment details", "Thông tin thanh toán")}>{t("Access is updated after payment confirmation.", "Quyền sử dụng được cập nhật sau khi thanh toán được xác nhận.")}</HelpTip>
+                <GuideTarget label={t("Payment details", "Thông tin thanh toán")}>{t("Access is updated after payment confirmation.", "Quyền sử dụng được cập nhật sau khi thanh toán được xác nhận.")}</GuideTarget>
               </div>
               <span className="action-with-help"><button
                 className="button button-primary"
@@ -190,7 +190,7 @@ export function AccountPage({ app }: RouteProps) {
                 onClick={() => void run(t("Opening checkout", "Đang mở thanh toán"), () => bridge.command("commerce.checkout", { offerId: selectedOffer }))}
               >
                 <CreditCard size={17} /> {t("Continue to checkout", "Tiếp tục thanh toán")} <ExternalLink size={14} />
-              </button><OptionHelp label={t("Continue to checkout", "Tiếp tục thanh toán")} /></span>
+              </button><GuideOption label={t("Continue to checkout", "Tiếp tục thanh toán")} /></span>
             </div>
           )}
         </section>
@@ -206,7 +206,7 @@ export function AccountPage({ app }: RouteProps) {
             onClick={() => void run(t("Refreshing access", "Đang làm mới quyền truy cập"), () => bridge.command("commerce.restore"))}
           >
             <RefreshCw size={16} /> {t("Refresh access", "Làm mới quyền truy cập")}
-          </button><OptionHelp label={t("Refresh access", "Làm mới quyền truy cập")} /></span>
+          </button><GuideOption label={t("Refresh access", "Làm mới quyền truy cập")} /></span>
         </div>
       )}
     </section>

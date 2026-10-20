@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { DesktopBridge } from "./bridge";
@@ -59,14 +59,16 @@ describe("desktop application shell", () => {
 
     expect(screen.getByRole("heading", { name: "Translate", level: 1 })).toBeInTheDocument();
 
-    expect(screen.getAllByRole("button", { name: "Explanation mode" })).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: "Explanation mode" }));
-    expect(screen.getByRole("button", { name: "Explanation mode" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByRole("button", { name: "User guide" })).toHaveLength(1);
+    await waitFor(() => expect(screen.getByRole("button", { name: "User guide" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "User guide" }));
+    expect(screen.getByRole("button", { name: "User guide" })).toHaveAttribute("aria-pressed", "true");
 
+    fireEvent.click(screen.getByRole("button", { name: "Close guide" }));
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     expect(screen.getByRole("heading", { name: "Account", level: 1 })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Explanation mode" })).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Explanation mode" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getAllByRole("button", { name: "User guide" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "User guide" })).toHaveAttribute("aria-pressed", "false");
     expect(await screen.findByText("LexVerse Pro - monthly")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));

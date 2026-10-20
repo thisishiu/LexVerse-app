@@ -4,7 +4,7 @@ import { routes, routeIds } from "./app/routes";
 import type { AppRoute } from "./app/route-types";
 import { useDesktopApp } from "./app/useDesktopApp";
 import { StartupIntro } from "./app/StartupIntro";
-import { HelpMode } from "./components/HelpMode";
+import { GuideProvider } from "./components/GuideProvider";
 import "./styles.css";
 import { isTranslationError, translationErrorMessage } from "./translationErrors";
 
@@ -31,7 +31,7 @@ function errorMessage(error: string, vietnamese: boolean) {
 
 export function App() {
   const app = useDesktopApp();
-  const notifyHelpMode = useCallback((active: boolean) => {
+  const notifyGuideProvider = useCallback((active: boolean) => {
     void app.bridge.command("app.setExplanationMode", { active }).catch(() => {});
   }, [app.bridge]);
   const [introActive, setIntroActive] = useState(() =>
@@ -105,7 +105,7 @@ export function App() {
   return (
     <>
     {introActive && <StartupIntro ready={Boolean(app.snapshot)} onComplete={finishIntro} />}
-    <div className="app-shell" inert={introActive}>
+    <GuideProvider route={route} allowed={app.snapshot?.privacy.allowRemoteTextProcessing} ready={Boolean(app.snapshot) && !introActive} error={app.error} shortcuts={app.snapshot ? { ...app.snapshot.settings.shortcuts } : undefined} vietnamese={isVietnamese} onActiveChange={notifyGuideProvider}><div className="app-shell" inert={introActive}>
       <aside className="sidebar">
         <div className="brand">
           <img className="brand-mark" src="/branding/logo.png" alt="" aria-hidden="true" />
@@ -122,6 +122,7 @@ export function App() {
               <button
                 type="button"
                 key={id}
+                data-help-id={`nav-${id}`}
                 className={route === id ? "nav-active" : ""}
                 aria-current={route === id ? "page" : undefined}
                 aria-label={routeCopy[id][isVietnamese ? 1 : 0].label}
@@ -175,7 +176,7 @@ export function App() {
         )}
 
         <div className="page-viewport">
-          <HelpMode key={route} vietnamese={isVietnamese} onActiveChange={notifyHelpMode}><Page app={app} navigate={navigate} /></HelpMode>
+          <Page app={app} navigate={navigate} />
         </div>
 
         <footer className="app-statusbar">
@@ -184,7 +185,7 @@ export function App() {
 
         </footer>
       </main>
-    </div>
+    </div></GuideProvider>
     </>
   );
 }

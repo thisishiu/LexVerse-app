@@ -1,6 +1,6 @@
-import { OptionHelp } from "../../components/OptionHelp";
+import { GuideOption } from "../../components/GuideOption";
 import { useState, type FormEvent } from "react";
-import { HelpTip } from "../../components/HelpTip";
+import { GuideTarget } from "../../components/GuideTarget";
 import { WindowPicker } from "../../components/WindowPicker";
 import {
   ArrowLeftRight,
@@ -78,7 +78,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
     <section className="page workspace-page">
       <div className="workspace-ocr-toolbar panel">
         <label htmlFor="workspace-ocr-mode">{t("OCR mode", "Chế độ OCR")}</label>
-        <HelpTip label={t("About OCR modes", "Hướng dẫn chế độ OCR")}>{t("Full screen: mixed layouts. Subtitle: video captions. Game dialogue: dialogue boxes. Document: paragraphs and columns. Comic: speech bubbles. Choose the layout that matches your content.", "Toàn màn hình: bố cục hỗn hợp. Phụ đề: chữ trong video. Hội thoại game: hộp thoại. Tài liệu: đoạn văn và cột. Truyện tranh: bong bóng thoại. Chọn chế độ phù hợp với nội dung.")}</HelpTip>
+        <GuideTarget label={t("About OCR modes", "Hướng dẫn chế độ OCR")}>{t("Full screen: mixed layouts. Subtitle: video captions. Game dialogue: dialogue boxes. Document: paragraphs and columns. Comic: speech bubbles. Choose the layout that matches your content.", "Toàn màn hình: bố cục hỗn hợp. Phụ đề: chữ trong video. Hội thoại game: hộp thoại. Tài liệu: đoạn văn và cột. Truyện tranh: bong bóng thoại. Chọn chế độ phù hợp với nội dung.")}</GuideTarget>
         <select id="workspace-ocr-mode" value={snapshot?.settings.ocrMode ?? "document"} disabled={disabled || !snapshot}
           onChange={event => { const ocrMode = event.target.value; if (snapshot) void run(t("Saving OCR mode", "Đang lưu chế độ OCR"), () => bridge.command("settings.update", { ...snapshot.settings, ocrMode })); }}>
           {Object.entries(isVietnamese ? modesVi : modes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -98,7 +98,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
             <header className="panel-heading">
               <div className="panel-icon panel-icon-green"><MonitorUp size={19} /></div>
               <div>
-                <div className="heading-with-help"><h3 id="live-title">{t("Live translation", "Dịch thời gian thực")}</h3><OptionHelp label={t("Live translation", "Dịch thời gian thực")} /></div>
+                <div className="heading-with-help"><h3 id="live-title">{t("Live translation", "Dịch thời gian thực")}</h3><GuideOption label={t("Live translation", "Dịch thời gian thực")} /></div>
               </div>
               <span className={`status-badge ${realtimeRunning ? "status-success" : "status-neutral"}`}>
                 <span /> {formatRealtimeStatus(realtimeStatus, isVietnamese)}
@@ -115,7 +115,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
               <span className="action-with-help"><button type="button" className="button button-secondary live-app-button" disabled={disabled || !remoteProcessingAllowed || !snapshot?.realtime.canStartWindow}
                 onClick={() => setWindowPickerOpen(true)}>
                 <MonitorUp size={17} /> {t("Translate app", "Dịch theo app")}
-              </button><OptionHelp label={t("Translate app", "Dịch theo app")} /></span>
+              </button><GuideOption label={t("Translate app", "Dịch theo app")} /></span>
               <span className="action-with-help"><button
                 type="button"
                 className="button button-primary"
@@ -123,7 +123,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
                 onClick={() => void run(t("Selecting screen region", "Đang chọn vùng màn hình"), () => bridge.command("realtime.selectRegion"))}
               >
                 <ScanLine size={18} /> {t("Region", "Vùng")}
-              </button><OptionHelp label={t("Region", "Vùng")} /></span>
+              </button><GuideOption label={t("Region", "Vùng")} /></span>
               <span className="action-with-help"><button
                 type="button"
                 className="button button-secondary"
@@ -131,7 +131,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
                 onClick={() => void run(t("Starting full-screen translation", "Đang dịch toàn màn hình"), () => bridge.command("realtime.startFullScreen"))}
               >
                 <Maximize2 size={17} /> {t("Full screen", "Toàn màn hình")}
-              </button><OptionHelp label={t("Full screen", "Toàn màn hình")} /></span>
+              </button><GuideOption label={t("Full screen", "Toàn màn hình")} /></span>
               <span className="action-with-help"><button
                 type="button"
                 className="icon-button live-stop-button"
@@ -141,7 +141,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
                 title={t("Stop live translation", "Dừng dịch realtime")}
               >
                 <Square size={14} fill="currentColor" />
-              </button><OptionHelp label={t("Stop live translation", "Dừng dịch realtime")} /></span>
+              </button><GuideOption label={t("Stop live translation", "Dừng dịch realtime")} /></span>
             </div>
 
             <div className="overlay-action">
@@ -154,7 +154,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
                     title={t("Clear overlay", "Xóa lớp phủ")}
                   >
                     <Eraser size={15} />
-              </button><OptionHelp label={t("Clear overlay", "Xóa lớp phủ")} /></span>
+              </button><GuideOption label={t("Clear overlay", "Xóa lớp phủ")} /></span>
               <span>{t("Clear overlay", "Xóa lớp phủ")}</span>
             </div>
             <div className="realtime-window-picker">
@@ -180,7 +180,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
               <div className="inline-notice notice-warning compact-notice">
                 <ShieldAlert size={18} />
                 <p>{t("External text processing is disabled.", "Xử lý văn bản bên ngoài đang tắt.")}</p>
-                <span className="action-with-help"><button type="button" className="button button-quiet" onClick={() => navigate("settings")}>{t("Review", "Xem lại")}</button><OptionHelp label={t("Review", "Xem lại")} /></span>
+                <span className="action-with-help"><button type="button" className="button button-quiet" onClick={() => navigate("settings")}>{t("Review", "Xem lại")}</button><GuideOption label={t("Review", "Xem lại")} /></span>
               </div>
             )}
           </section>
@@ -189,7 +189,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
             <header className="panel-heading">
               <div className="panel-icon panel-icon-blue"><Keyboard size={19} /></div>
               <div>
-                <div className="heading-with-help"><h3 id="popup-title">{t("Selected text", "Văn bản đã chọn")}</h3><OptionHelp label={t("Selected text", "Văn bản đã chọn")} /></div>
+                <div className="heading-with-help"><h3 id="popup-title">{t("Selected text", "Văn bản đã chọn")}</h3><GuideOption label={t("Selected text", "Văn bản đã chọn")} /></div>
               </div>
             </header>
             <div className="shortcut-row">
@@ -208,7 +208,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
                   title={t("Translate selected text", "Dịch văn bản đã chọn")}
                 >
                   <Languages size={15} />
-                </button><OptionHelp label={t("Translate selected text", "Dịch văn bản đã chọn")} /></span>
+                </button><GuideOption label={t("Translate selected text", "Dịch văn bản đã chọn")} /></span>
               </div>
             </div>
           </section>
@@ -218,7 +218,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
             <div className="panel-heading-copy">
               <div className="panel-icon panel-icon-orange"><Languages size={19} /></div>
               <div>
-                <div className="heading-with-help"><h3>{t("Text translator", "Dịch văn bản")}</h3><OptionHelp label={t("Text translator", "Dịch văn bản")} /></div>
+                <div className="heading-with-help"><h3>{t("Text translator", "Dịch văn bản")}</h3><GuideOption label={t("Text translator", "Dịch văn bản")} /></div>
               </div>
             </div>
             <span className="character-count">{quickText.length.toLocaleString()} / 32,000</span>
@@ -226,7 +226,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
 
           <div className="language-toolbar">
             <div className="language-field">
-              <span><label htmlFor="quick-source-language">{t("From", "Từ")}</label> <OptionHelp label={t("From", "Từ")} /></span>
+              <span><label htmlFor="quick-source-language">{t("From", "Từ")}</label> <GuideOption label={t("From", "Từ")} /></span>
               <select id="quick-source-language" value={sourceLanguage} onChange={(event) => setSourceLanguage(event.target.value)}>
                 {languages.map(([value]) => <option key={value} value={value}>{languageLabel(value, isVietnamese)}</option>)}
               </select>
@@ -240,9 +240,9 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
               title={sourceLanguage === "auto" ? t("Choose a source language to swap", "Chọn ngôn ngữ nguồn để đổi chiều") : t("Swap languages", "Đổi chiều ngôn ngữ")}
             >
               <ArrowLeftRight size={18} />
-            </button><OptionHelp label={t("Swap languages", "Đổi chiều ngôn ngữ")} /></span>
+            </button><GuideOption label={t("Swap languages", "Đổi chiều ngôn ngữ")} /></span>
             <div className="language-field">
-              <span><label htmlFor="quick-target-language">{t("To", "Sang")}</label> <OptionHelp label={t("To", "Sang")} /></span>
+              <span><label htmlFor="quick-target-language">{t("To", "Sang")}</label> <GuideOption label={t("To", "Sang")} /></span>
               <select id="quick-target-language" value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value)}>
                 {languages.filter(([value]) => value !== "auto").map(([value]) => (
                   <option key={value} value={value}>{languageLabel(value, isVietnamese)}</option>
@@ -253,7 +253,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
 
           <div className="translation-editors">
             <label className="translation-pane source-pane" htmlFor="quick-text">
-              <HelpTip id="workspace-source-text" label={t("Source text", "Văn bản nguồn")} target=".source-pane">{t("Enter or paste the text to translate, then choose the languages and press Translate.", "Nhập hoặc dán văn bản cần dịch, chọn ngôn ngữ rồi bấm Dịch.")}</HelpTip>
+              <GuideTarget id="workspace-source-text" label={t("Source text", "Văn bản nguồn")} target=".source-pane">{t("Enter or paste the text to translate, then choose the languages and press Translate.", "Nhập hoặc dán văn bản cần dịch, chọn ngôn ngữ rồi bấm Dịch.")}</GuideTarget>
               <span className="pane-label">{t("Source text", "Văn bản nguồn")}</span>
               <textarea
                 id="quick-text"
@@ -275,7 +275,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
                   title={t("Copy translation", "Sao chép bản dịch")}
                 >
                   <Clipboard size={16} />
-                </button><OptionHelp label={t("Copy translation", "Sao chép bản dịch")} /></span>
+                </button><GuideOption label={t("Copy translation", "Sao chép bản dịch")} /></span>
               </div>
               <output aria-live="polite">
                 {snapshot?.quickTranslation || <span className="result-placeholder">{t("Translation will appear here.", "Bản dịch sẽ xuất hiện tại đây.")}</span>}
@@ -292,7 +292,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
             {!remoteProcessingAllowed ? (
               <span className="action-with-help"><button type="button" className="privacy-link" onClick={() => navigate("settings")}>
                 <ShieldAlert size={16} /> {t("External processing is off", "Xử lý bên ngoài đang tắt")}
-              </button><OptionHelp label={t("External processing is off", "Xử lý bên ngoài đang tắt")} /></span>
+              </button><GuideOption label={t("External processing is off", "Xử lý bên ngoài đang tắt")} /></span>
             ) : <span />}
             <span className="action-with-help"><button
               className="button button-primary translate-action"
@@ -300,7 +300,7 @@ export function WorkspacePage({ app, navigate }: RouteProps) {
             >
               <Languages size={17} />
               {busy === translatingLabel ? t("Translating...", "Đang dịch...") : t("Translate", "Dịch")}
-            </button><OptionHelp label={t("Translate", "Dịch")} /></span>
+            </button><GuideOption label={t("Translate", "Dịch")} /></span>
           </footer>
         </form>
 
