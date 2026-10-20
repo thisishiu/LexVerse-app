@@ -69,6 +69,7 @@ artifacts/ocr-debug/
 # Local configuration and secrets
 .env
 .env.*
+*.env
 !.env.example
 appsettings.Local.json
 appsettings.*.local.json

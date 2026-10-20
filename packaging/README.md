@@ -4,6 +4,13 @@ LexVerse uses one self-contained MSIX package per release channel. Windows App I
 
 ## Build a package
 
+The desktop project copies `packaging/client.env` to `.env` beside the executable
+in both build and publish output. This file contains public production endpoints,
+the desktop OAuth client ID, and the entitlement verification public key. Keep it
+in portable ZIP distributions as well. Never add credentials, private keys, or
+developer localhost settings to this file. The repository-root `.env` and
+`.env.local` are not distribution inputs.
+
 Run from the repository root on Windows with the .NET SDK and Windows SDK packaging tools installed:
 
 ```powershell

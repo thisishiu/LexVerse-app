@@ -23,6 +23,11 @@
 
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
+    <Content Include="..\..\packaging\client.env" Link=".env">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <TargetPath>.env</TargetPath>
+    </Content>
     <Resource Include="..\LexVerse.Desktop.UI\src\assets\fonts\BeVietnamPro-*.ttf" Link="Fonts\%(Filename)%(Extension)" />
   </ItemGroup>
 
