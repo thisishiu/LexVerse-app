@@ -32,9 +32,12 @@ function host() {
   } };
   return {
     commands,
-    reply(command: BridgeCommand, ok: boolean, payload?: unknown) {
+    snapshot(next: DesktopSnapshot) {
+      act(() => handlers.forEach(handler => handler({ data: { version: 1, type: "app.snapshot", payload: next } })));
+    },
+    reply(command: BridgeCommand, ok: boolean, payload?: unknown, errorCode = "operation-failed") {
       act(() => handlers.forEach(handler => handler({ data: {
-        version: 1, id: command.id, ok, payload, errorCode: ok ? undefined : "operation-failed"
+        version: 1, id: command.id, ok, payload, errorCode: ok ? undefined : errorCode
       } })));
     }
   };
@@ -53,6 +56,50 @@ it("signals ready only after the first snapshot is committed, including StrictMo
   expect(result.current.targetLanguage).toBe("vi");
   expect(result.current.error).toBeUndefined();
   native.reply(native.commands.at(-1)!, true);
+  unmount();
+});
+
+it("saves privacy independently and ignores stale snapshots after the save response", async () => {
+  const native = host();
+  const { result, unmount } = renderHook(() => useDesktopApp());
+  native.reply(native.commands[0], true, snapshot);
+  await waitFor(() => expect(native.commands.at(-1)?.type).toBe("app.uiReady"));
+  native.reply(native.commands.at(-1)!, true);
+  let saving!: Promise<void>;
+  act(() => { saving = result.current.updatePrivacy(false, false); });
+  expect(result.current.privacySaving).toBe(true);
+  expect(result.current.busy).toBeUndefined();
+  act(() => { void result.current.updatePrivacy(true, true); });
+  expect(native.commands.filter(command => command.type === "privacy.updateConsent")).toHaveLength(1);
+  const privacy = { allowRemoteTextProcessing: false, allowLocalDiagnostics: false, revision: 1 };
+  native.reply(native.commands.at(-1)!, true, privacy);
+  await act(async () => { await saving; });
+  expect(result.current.snapshot?.privacy).toEqual(privacy);
+  expect(result.current.privacySaving).toBe(false);
+  native.snapshot({ ...snapshot, status: "A newer status with stale privacy" });
+  expect(result.current.snapshot?.privacy).toEqual(privacy);
+  expect(result.current.snapshot?.status).toBe("A newer status with stale privacy");
+  unmount();
+});
+
+it.each(["operation-failed", "consent-declined"])("keeps confirmed privacy on %s and permits retry", async (errorCode) => {
+  const native = host();
+  const { result, unmount } = renderHook(() => useDesktopApp());
+  native.reply(native.commands[0], true, snapshot);
+  await waitFor(() => expect(native.commands.at(-1)?.type).toBe("app.uiReady"));
+  native.reply(native.commands.at(-1)!, true);
+  let saving!: Promise<void>;
+  act(() => { saving = result.current.updatePrivacy(true, false); });
+  native.reply(native.commands.at(-1)!, false, undefined, errorCode);
+  await act(async () => { await saving; });
+  expect(result.current.snapshot?.privacy).toEqual(snapshot.privacy);
+  expect(result.current.privacyError).toBe(errorCode === "consent-declined" ? undefined : errorCode);
+  expect(result.current.privacySaving).toBe(false);
+  act(() => { saving = result.current.updatePrivacy(false, false); });
+  expect(result.current.privacyError).toBeUndefined();
+  native.reply(native.commands.at(-1)!, true, { ...snapshot.privacy, allowLocalDiagnostics: false, revision: 1 });
+  await act(async () => { await saving; });
+  expect(result.current.snapshot?.privacy.allowLocalDiagnostics).toBe(false);
   unmount();
 });
 

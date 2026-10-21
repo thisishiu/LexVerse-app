@@ -7,6 +7,58 @@ import { SettingsPage } from "./SettingsPage";
 import { GuideProvider } from "../../components/GuideProvider";
 
 afterEach(cleanup);
+it.each([
+  ["External text processing", true, true],
+  ["Local performance diagnostics", false, false]
+] as const)("activates %s through its visible switch", async (name, remote, diagnostics) => {
+  const bridge = new DesktopBridge();
+  const snapshot = structuredClone(await bridge.command<DesktopSnapshot>("app.getSnapshot"));
+  bridge.dispose();
+  snapshot.settings.appLanguage = "en";
+  snapshot.privacy.allowRemoteTextProcessing = false;
+  snapshot.privacy.allowLocalDiagnostics = true;
+  const updatePrivacy = vi.fn();
+  const app = { snapshot, updatePrivacy, privacySaving: false } as unknown as DesktopApp;
+  const view = render(<SettingsPage app={app} navigate={vi.fn()} />);
+  const checkbox = screen.getByRole("checkbox", { name });
+  const switchLabel = checkbox.closest("label")!;
+  expect(switchLabel).toHaveAttribute("for", checkbox.id);
+  fireEvent.click(switchLabel.querySelector("span")!);
+  expect(updatePrivacy).toHaveBeenCalledExactlyOnceWith(remote, diagnostics);
+  updatePrivacy.mockClear();
+  fireEvent.click(switchLabel);
+  expect(updatePrivacy).toHaveBeenCalledExactlyOnceWith(remote, diagnostics);
+  updatePrivacy.mockClear();
+  fireEvent.click(screen.getByText(name, { selector: "strong" }));
+  expect(updatePrivacy).toHaveBeenCalledExactlyOnceWith(remote, diagnostics);
+  view.rerender(<SettingsPage app={{ ...app, privacySaving: true }} navigate={vi.fn()} />);
+  updatePrivacy.mockClear();
+  fireEvent.click(switchLabel.querySelector("span")!);
+  expect(updatePrivacy).not.toHaveBeenCalled();
+});
+
+it("locks only privacy while saving and shows a retryable inline error", async () => {
+  const bridge = new DesktopBridge();
+  const snapshot = structuredClone(await bridge.command<DesktopSnapshot>("app.getSnapshot"));
+  bridge.dispose();
+  snapshot.settings.appLanguage = "en";
+  const updatePrivacy = vi.fn();
+  const app = { snapshot, updatePrivacy, privacySaving: false, busy: "Translating" } as unknown as DesktopApp;
+  const view = render(<GuideProvider vietnamese={false}><SettingsPage app={app} navigate={vi.fn()} /></GuideProvider>);
+  const diagnostics = screen.getByRole("checkbox", { name: "Local performance diagnostics" });
+  expect(diagnostics).toBeEnabled();
+  fireEvent.click(diagnostics);
+  expect(updatePrivacy).toHaveBeenCalledWith(false, false);
+  view.rerender(<GuideProvider vietnamese={false}><SettingsPage app={{ ...app, busy: undefined, privacySaving: true }} navigate={vi.fn()} /></GuideProvider>);
+  expect(diagnostics).toBeDisabled();
+  expect(screen.getByRole("checkbox", { name: "External text processing" })).toBeDisabled();
+  expect(screen.getByRole("status")).toHaveTextContent("Saving privacy");
+  expect(screen.getByRole("button", { name: "Translation" })).toBeEnabled();
+  view.rerender(<GuideProvider vietnamese={false}><SettingsPage app={{ ...app, busy: undefined, privacyError: "operation-failed" }} navigate={vi.fn()} /></GuideProvider>);
+  expect(diagnostics).toBeEnabled();
+  expect(screen.getByRole("alert")).toHaveTextContent("Please try again");
+});
+
 it.each(["en", "vi"] as const)("explains settings without changing them (%s)", async language => {
   const bridge = new DesktopBridge();
   const snapshot = await bridge.command<DesktopSnapshot>("app.getSnapshot"); bridge.dispose();

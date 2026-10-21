@@ -73,6 +73,32 @@ public sealed class PrivacyPreferencesTests
         Directory.Delete(directory, recursive: true);
     }
 
+    [Fact]
+    public async Task FailedSave_KeepsConsentAndCanRetry()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"lexverse-privacy-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var blockedDirectory = Path.Combine(directory, "blocked");
+        await File.WriteAllTextAsync(blockedDirectory, "not a directory", TestContext.Current.CancellationToken);
+        using var preferences = new PersistentPrivacyPreferencesService(Path.Combine(blockedDirectory, "privacy.json"));
+        var changed = 0;
+        preferences.Changed += (_, _) => Interlocked.Increment(ref changed);
+        try
+        {
+            await Assert.ThrowsAnyAsync<IOException>(() => preferences.UpdateAsync(new PrivacyPreferences(true, false)));
+            Assert.False(preferences.Current.AllowRemoteTextProcessing);
+            Assert.Equal(0, changed);
+            File.Delete(blockedDirectory);
+            await preferences.UpdateAsync(new PrivacyPreferences(true, false));
+            Assert.True(preferences.Current.AllowRemoteTextProcessing);
+            Assert.Equal(1, changed);
+            var translator = new ConsentCheckingTextTranslator(new RecordingTranslator(), preferences);
+            await preferences.UpdateAsync(new PrivacyPreferences(false, false));
+            await Assert.ThrowsAsync<RemoteProcessingConsentRequiredException>(() => translator.TranslateAsync("private", "vi"));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
     private sealed class MemoryPreferences(PrivacyPreferences current) : IPrivacyPreferencesService
     {
         public PrivacyPreferences Current { get; private set; } = current;

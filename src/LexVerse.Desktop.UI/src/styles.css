@@ -1546,6 +1546,7 @@ input:disabled {
 }
 
 .toggle {
+  cursor: pointer;
   position: relative;
   width: 38px;
   height: 22px;
@@ -1592,6 +1593,14 @@ input:disabled {
 .toggle input:focus-visible + span {
   outline: 2px solid var(--info);
   outline-offset: 2px;
+}
+
+.toggle:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+.toggle input:disabled + span {
+  opacity: 0.5;
 }
 
 .default-language-grid {

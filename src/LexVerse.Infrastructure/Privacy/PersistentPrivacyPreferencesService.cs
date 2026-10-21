@@ -31,7 +31,13 @@ public sealed class PersistentPrivacyPreferencesService : IPrivacyPreferencesSer
 
     public event EventHandler<PrivacyPreferences>? Changed;
 
-    public async Task UpdateAsync(
+    public Task UpdateAsync(
+        PrivacyPreferences preferences,
+        CancellationToken cancellationToken = default) =>
+        // Directory creation, durable flush and atomic rename can block on storage.
+        Task.Run(() => UpdateCoreAsync(preferences, cancellationToken), cancellationToken);
+
+    private async Task UpdateCoreAsync(
         PrivacyPreferences preferences,
         CancellationToken cancellationToken = default)
     {

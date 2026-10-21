@@ -54,7 +54,7 @@ const defaultSettings: DesktopSettings = {
 };
 
 export function SettingsPage({ app }: RouteProps) {
-  const { snapshot, bridge, busy, run } = app;
+  const { snapshot, bridge, busy, run, privacySaving, privacyError } = app;
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
 
 
@@ -108,10 +108,7 @@ export function SettingsPage({ app }: RouteProps) {
   }
 
   function updatePrivacy(allowRemoteTextProcessing: boolean, allowLocalDiagnostics: boolean) {
-    void run(t("Saving privacy", "Đang lưu quyền riêng tư"), () => bridge.command("privacy.updateConsent", {
-      allowRemoteTextProcessing,
-      allowLocalDiagnostics
-    }));
+    void app.updatePrivacy(allowRemoteTextProcessing, allowLocalDiagnostics);
   }
 
   function saveSettings() {
@@ -196,7 +193,7 @@ export function SettingsPage({ app }: RouteProps) {
                   inlineDetail
                   detail={t("Selected, typed and OCR text", "Văn bản được chọn, nhập và nhận dạng OCR")}
                   checked={snapshot?.privacy.allowRemoteTextProcessing ?? false}
-                  disabled={Boolean(busy)}
+                  disabled={privacySaving || !snapshot}
                   onChange={(checked) => updatePrivacy(checked, snapshot?.privacy.allowLocalDiagnostics ?? true)}
                 />
                 <ToggleRow
@@ -204,9 +201,13 @@ export function SettingsPage({ app }: RouteProps) {
                   inlineDetail
                   detail={t("Content-free timing metrics", "Chỉ số thời gian không chứa nội dung")}
                   checked={snapshot?.privacy.allowLocalDiagnostics ?? true}
-                  disabled={Boolean(busy)}
+                  disabled={privacySaving || !snapshot}
                   onChange={(checked) => updatePrivacy(snapshot?.privacy.allowRemoteTextProcessing ?? false, checked)}
                 />
+                {privacySaving && <p role="status">{t("Saving privacy...", "Đang lưu quyền riêng tư…")}</p>}
+                {privacyError && <p className="settings-inline-error" role="alert">{privacyError === "bridge-timeout"
+                  ? t("Saving privacy settings timed out. Please try again.", "Lưu quyền riêng tư quá thời gian chờ. Vui lòng thử lại.")
+                  : t("Could not save privacy settings. Please try again.", "Không thể lưu quyền riêng tư. Vui lòng thử lại.")}</p>}
               </div>
 
               <div className="settings-meta-row">
@@ -329,7 +330,7 @@ function ToggleRow({ label, detail, inlineDetail = false, checked, disabled, onC
   return (
     <div className="setting-row">
       <span><label htmlFor={id}><strong>{label}</strong></label> <GuideOption label={label} />{detail && inlineDetail && <small>{detail}</small>}</span>
-      <span className="toggle"><input id={id} aria-label={label} type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /><span aria-hidden="true" /></span>
+      <label className="toggle" htmlFor={id}><input id={id} aria-label={label} type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /><span aria-hidden="true" /></label>
     </div>
   );
 }

@@ -16,7 +16,6 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
     private const double HorizontalPadding = 4;
     private const double VerticalPadding = 2;
     private const double MinFontSize = 8;
-    private const double MaxFontSize = 44;
     private readonly ObservableCollection<TextItem> _items = [];
     private readonly Dispatcher _dispatcher;
     private readonly IDesktopPreferencesService _preferences;
@@ -143,8 +142,7 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
             targetRect.Width,
             targetRect.Height,
             maxWidth,
-            Math.Clamp(OverlaySourceGeometry.FontSizeFromInkHeight(fontRect.Height) * fontScale,
-                MinFontSize, MaxFontSize),
+            Math.Max(MinFontSize, OverlaySourceGeometry.FontSizeFromInkHeight(fontRect.Height) * fontScale),
             MinFontSize,
             HorizontalPadding,
             VerticalPadding,

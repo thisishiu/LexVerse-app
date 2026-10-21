@@ -20,6 +20,9 @@ public partial class MainWindow
     private const string DesktopUiHostName = "app.lexverse.local";
     private const string DesktopUiOrigin = "https://app.lexverse.local";
     private readonly SemaphoreSlim _desktopCommandGate = new(1, 1);
+    private readonly SemaphoreSlim _privacyCommandGate = new(1, 1);
+    private long _privacyRevision;
+    private Task _privacyRealtimeStopTask = Task.CompletedTask;
     private CancellationTokenSource? _desktopUiLifetime;
     private DispatcherTimer? _desktopSnapshotTimer;
     private DispatcherTimer? _startupTimer;
@@ -190,9 +193,10 @@ public partial class MainWindow
             return;
         }
 
+        var commandGate = command.Type == "privacy.updateConsent" ? _privacyCommandGate : _desktopCommandGate;
         try
         {
-            await _desktopCommandGate.WaitAsync(lifetime.Token);
+            await commandGate.WaitAsync(lifetime.Token);
         }
         catch (OperationCanceledException)
         {
@@ -225,7 +229,7 @@ public partial class MainWindow
         }
         finally
         {
-            _desktopCommandGate.Release();
+            commandGate.Release();
         }
     }
 
@@ -233,6 +237,8 @@ public partial class MainWindow
     {
         if (_cleanupStarted || _startupFailed)
             throw new OperationCanceledException();
+        if (command.Type is "realtime.start" or "realtime.startWindow" or "realtime.startFullScreen" or "realtime.selectRegion")
+            await _privacyRealtimeStopTask;
         switch (command.Type)
         {
             case "app.getSnapshot":
@@ -311,8 +317,7 @@ public partial class MainWindow
             case "privacy.updateConsent":
             {
                 var payload = DesktopBridgeProtocol.DeserializePayload<PrivacyPayload>(command.Payload);
-                await UpdatePrivacyFromWebAsync(payload);
-                return null;
+                return await UpdatePrivacyFromWebAsync(payload);
             }
 
             case "settings.update":
@@ -375,12 +380,13 @@ public partial class MainWindow
         }
     }
 
-    private async Task UpdatePrivacyFromWebAsync(PrivacyPayload payload)
+    private async Task<object> UpdatePrivacyFromWebAsync(PrivacyPayload payload)
     {
         var current = _privacyPreferences.Current;
         if (payload.AllowRemoteTextProcessing && !current.AllowRemoteTextProcessing)
         {
             var confirmation = MessageBox.Show(
+                this,
                 "LexVerse will send selected, typed, or OCR text to the configured translation provider. Operational metrics never include that text. Continue?",
                 "Allow external text processing",
                 MessageBoxButton.YesNo,
@@ -394,13 +400,43 @@ public partial class MainWindow
         var updated = new PrivacyPreferences(
             payload.AllowRemoteTextProcessing,
             payload.AllowLocalDiagnostics);
-        await _privacyPreferences.UpdateAsync(updated);
-        if (!updated.AllowRemoteTextProcessing)
-        {
-            await _realtimeModule.Coordinator.StopAsync();
-        }
-        await RefreshFeatureAccessAsync();
+        await _privacyPreferences.UpdateAsync(updated, _desktopUiLifetime?.Token ?? CancellationToken.None);
+        _privacyRevision++;
         _status = "Privacy preferences saved.";
+        if (current.AllowRemoteTextProcessing && !updated.AllowRemoteTextProcessing)
+        {
+            _privacyRealtimeStopTask = StopRealtimeAfterPrivacyChangeAsync(_privacyRealtimeStopTask);
+        }
+        return BuildPrivacySnapshot();
+    }
+
+    private object BuildPrivacySnapshot() => new
+    {
+        allowRemoteTextProcessing = _privacyPreferences.Current.AllowRemoteTextProcessing,
+        allowLocalDiagnostics = _privacyPreferences.Current.AllowLocalDiagnostics,
+        revision = _privacyRevision
+    };
+
+    private async Task StopRealtimeAfterPrivacyChangeAsync(Task previous)
+    {
+        // Let the save response reach WebView before waiting for realtime cleanup.
+        await Task.Yield();
+        try
+        {
+            await previous;
+            await _realtimeModule.Coordinator.StopAsync(_desktopUiLifetime?.Token ?? CancellationToken.None);
+            if (_realtimeModule.Coordinator.State.Status == LexVerse.Application.Realtime.RealtimeCoordinatorStatus.Faulted)
+                _status = "Privacy preferences saved, but realtime cleanup failed. Try stopping realtime again.";
+        }
+        catch (OperationCanceledException) when (_cleanupStarted || _desktopUiLifetime?.IsCancellationRequested == true) { }
+        catch (Exception)
+        {
+            _status = "Privacy preferences saved, but realtime cleanup failed. Try stopping realtime again.";
+        }
+        finally
+        {
+            PublishDesktopSnapshot();
+        }
     }
 
     private async Task UpdateDesktopSettingsAsync(SettingsPayload payload)
@@ -527,11 +563,7 @@ public partial class MainWindow
                     reset = preferences.ResetShortcut
                 }
             },
-            privacy = new
-            {
-                allowRemoteTextProcessing = _privacyPreferences.Current.AllowRemoteTextProcessing,
-                allowLocalDiagnostics = _privacyPreferences.Current.AllowLocalDiagnostics
-            },
+            privacy = BuildPrivacySnapshot(),
             quickTranslationErrorCode = _translationErrorCode,
             realtime = new
             {

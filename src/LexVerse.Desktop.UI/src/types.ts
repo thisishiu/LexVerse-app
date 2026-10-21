@@ -77,6 +77,12 @@ export interface DesktopSettings {
   shortcuts: DesktopShortcuts;
 }
 
+export interface PrivacySnapshot {
+  allowRemoteTextProcessing: boolean;
+  allowLocalDiagnostics: boolean;
+  revision?: number;
+}
+
 export interface DesktopSnapshot {
   moduleCount: number;
   status: string;
@@ -85,10 +91,7 @@ export interface DesktopSnapshot {
   sourceLanguage: string;
   targetLanguage: string;
   settings: DesktopSettings;
-  privacy: {
-    allowRemoteTextProcessing: boolean;
-    allowLocalDiagnostics: boolean;
-  };
+  privacy: PrivacySnapshot;
   realtime: {
     status: string;
     errorCode?: string;

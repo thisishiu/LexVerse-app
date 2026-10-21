@@ -137,10 +137,7 @@ public partial class MainWindow : Window
     }
 
     private void PrivacyPreferences_Changed(object? sender, PrivacyPreferences preferences) =>
-        Dispatcher.BeginInvoke(async () =>
-        {
-            await RefreshFeatureAccessAsync();
-        });
+        Dispatcher.BeginInvoke(() => PublishDesktopSnapshot());
 
     private void DesktopPreferences_Changed(object? sender, DesktopPreferences preferences) =>
         Dispatcher.BeginInvoke(() =>

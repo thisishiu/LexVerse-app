@@ -27,11 +27,16 @@ internal sealed class OverlayTextMeasurer : IDisposable
                 previousBreak?.Dispose();
                 previousBreak = null;
                 totalHeight += line.Height;
-                if (line.WidthIncludingTrailingWhitespace > width || totalHeight > height || line.Length == 0)
+                // TextBlock does not require trailing wrap whitespace to fit.
+                if (line.Width > width || totalHeight > height || line.Length == 0)
                     return false;
                 position += line.Length;
                 previousBreak = line.GetTextLineBreak();
-            } while (position <= text.Length);
+                // A formatter line may consume exactly the remaining characters.
+                // Only measure another line at the end for an explicit line break,
+                // as TextBlock does for a trailing newline.
+            } while (position < text.Length ||
+                (position == text.Length && text[^1] is '\r' or '\n' or '\u2028' or '\u2029'));
             return true;
         }
         finally { previousBreak?.Dispose(); }

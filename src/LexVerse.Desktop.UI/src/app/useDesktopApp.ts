@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DesktopBridge } from "../bridge";
-import type { DesktopSnapshot } from "../types";
+import type { DesktopSnapshot, PrivacySnapshot } from "../types";
 
 export function useDesktopApp() {
   const bridge = useMemo(() => new DesktopBridge(), []);
@@ -11,6 +11,9 @@ export function useDesktopApp() {
   const [selectedOffer, setSelectedOffer] = useState("");
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
+  const [privacySaving, setPrivacySaving] = useState(false);
+  const [privacyError, setPrivacyError] = useState<string>();
+  const privacyPending = useRef(false);
   const settingsLanguagePair = useRef("");
 
   useEffect(() => {
@@ -18,7 +21,8 @@ export function useDesktopApp() {
     bridge.connect();
     bridge.command<DesktopSnapshot>("app.getSnapshot").then((next) => {
       if (!active) return;
-      setSnapshot(next);
+      setSnapshot(current => current && (current.privacy.revision ?? 0) > (next.privacy.revision ?? 0)
+        ? { ...next, privacy: current.privacy } : next);
       setSourceLanguage(next.sourceLanguage);
       setTargetLanguage(next.targetLanguage);
       settingsLanguagePair.current = `${next.settings.sourceLanguage}:${next.settings.targetLanguage}`;
@@ -30,7 +34,8 @@ export function useDesktopApp() {
     const unsubscribe = bridge.subscribe((event) => {
       if (event.type !== "app.snapshot") return;
       const next = event.payload as DesktopSnapshot;
-      setSnapshot(next);
+      setSnapshot(current => current && (current.privacy.revision ?? 0) > (next.privacy.revision ?? 0)
+        ? { ...next, privacy: current.privacy } : next);
       const nextPair = `${next.settings.sourceLanguage}:${next.settings.targetLanguage}`;
       if (nextPair !== settingsLanguagePair.current) {
         settingsLanguagePair.current = nextPair;
@@ -68,7 +73,27 @@ export function useDesktopApp() {
     }
   }
 
-  return { bridge, snapshot, quickText, setQuickText, sourceLanguage, setSourceLanguage, targetLanguage, setTargetLanguage, selectedOffer, setSelectedOffer, busy, error, setError, run };
+  async function updatePrivacy(allowRemoteTextProcessing: boolean, allowLocalDiagnostics: boolean) {
+    if (privacyPending.current) return;
+    privacyPending.current = true;
+    setPrivacySaving(true);
+    setPrivacyError(undefined);
+    try {
+      const privacy = await bridge.command<PrivacySnapshot>("privacy.updateConsent", {
+        allowRemoteTextProcessing, allowLocalDiagnostics
+      });
+      setSnapshot(current => current && (current.privacy.revision ?? 0) <= (privacy.revision ?? 0)
+        ? { ...current, privacy } : current);
+    } catch (reason) {
+      const code = reason instanceof Error ? reason.message : "operation-failed";
+      if (code !== "consent-declined" && code !== "operation-cancelled") setPrivacyError(code);
+    } finally {
+      privacyPending.current = false;
+      setPrivacySaving(false);
+    }
+  }
+
+  return { bridge, snapshot, quickText, setQuickText, sourceLanguage, setSourceLanguage, targetLanguage, setTargetLanguage, selectedOffer, setSelectedOffer, busy, error, setError, run, privacySaving, privacyError, updatePrivacy };
 }
 
 export type DesktopApp = ReturnType<typeof useDesktopApp>;
