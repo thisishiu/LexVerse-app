@@ -69,7 +69,10 @@ describe("desktop application shell", () => {
     expect(screen.getByRole("heading", { name: "Account", level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "User guide" })).toHaveLength(1);
     expect(screen.getByRole("button", { name: "User guide" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByText("LexVerse Pro - monthly")).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Browse plans" }));
     expect(await screen.findByText("LexVerse Pro - monthly")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back to account" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByRole("heading", { name: "Application settings", level: 1 })).toBeInTheDocument();

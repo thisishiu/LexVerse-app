@@ -260,6 +260,8 @@ public sealed class BrowserSignInTests
     private sealed class Backend : ICommerceBackend
     {
         public bool IsConfigured => true;
+        public Task<SubscriptionSummary?> GetSubscriptionAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<SubscriptionSummary?>(new(new("free", "free", "Free", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1)), [], DateTimeOffset.UtcNow));
         public Task<CheckoutSession> CreateCheckoutAsync(string offerId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task RestorePurchasesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }

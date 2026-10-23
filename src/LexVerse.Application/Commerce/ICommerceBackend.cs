@@ -9,4 +9,7 @@ public interface ICommerceBackend
         CancellationToken cancellationToken = default);
 
     Task RestorePurchasesAsync(CancellationToken cancellationToken = default);
+
+    Task<SubscriptionSummary?> GetSubscriptionAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<SubscriptionSummary?>(null);
 }

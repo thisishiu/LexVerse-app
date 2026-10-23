@@ -181,10 +181,12 @@ public partial class MainWindow : Window
         catch (OperationCanceledException)
         {
             _status = "Account operation canceled.";
+            throw;
         }
         catch
         {
             _status = "Account operation failed. Check the network and try again.";
+            throw;
         }
     }
 

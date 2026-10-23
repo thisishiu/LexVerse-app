@@ -43,6 +43,26 @@ function host() {
   };
 }
 
+it("surfaces a failed commerce restore from the native bridge and allows retry", async () => {
+  const native = host();
+  const { result, unmount } = renderHook(() => useDesktopApp());
+  native.reply(native.commands[0], true, snapshot);
+  await waitFor(() => expect(native.commands.at(-1)?.type).toBe("app.uiReady"));
+  native.reply(native.commands.at(-1)!, true);
+  let syncing!: Promise<void>;
+  act(() => { syncing = result.current.run("Syncing", () => result.current.bridge.command("commerce.restore")); });
+  expect(result.current.busy).toBe("Syncing");
+  native.reply(native.commands.at(-1)!, false, undefined, "subscription-endpoint-unavailable");
+  await act(async () => { await syncing; });
+  expect(result.current.error).toBe("subscription-endpoint-unavailable");
+  expect(result.current.busy).toBeUndefined();
+  act(() => { syncing = result.current.run("Syncing", () => result.current.bridge.command("commerce.restore")); });
+  native.reply(native.commands.at(-1)!, true);
+  await act(async () => { await syncing; });
+  expect(result.current.error).toBeUndefined();
+  unmount();
+});
+
 it("signals ready only after the first snapshot is committed, including StrictMode remount", async () => {
   const native = host();
   const { result, unmount } = renderHook(() => useDesktopApp(), {

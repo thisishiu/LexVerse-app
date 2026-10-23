@@ -15,13 +15,17 @@ public sealed class CommerceCoordinator : IDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _lifetime = new();
     private bool _disposed;
+    private readonly TimeProvider _timeProvider;
+    private Task? _syncLoop;
+    private CancellationTokenSource? _syncCancellation;
 
     public CommerceCoordinator(
         IAccountSessionProvider accounts,
         IProductCatalogProvider catalogs,
         ICommerceBackend commerce,
         IExternalUriLauncher launcher,
-        IFeatureAccessService featureAccess)
+        IFeatureAccessService featureAccess,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(accounts);
         ArgumentNullException.ThrowIfNull(catalogs);
@@ -33,6 +37,7 @@ public sealed class CommerceCoordinator : IDisposable
         _commerce = commerce;
         _launcher = launcher;
         _featureAccess = featureAccess;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         if (_accounts is IBrowserSignIn browser)
             browser.SignInStateChanged += BrowserSignInStateChanged;
         State = new CommerceState(
@@ -84,15 +89,21 @@ public sealed class CommerceCoordinator : IDisposable
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
         ExecuteAsync(async token =>
         {
-            var catalog = await _catalogs.GetCatalogAsync(token);
             var session = await _accounts.GetSessionAsync(token);
+            ProductCatalog? catalog = null;
+            var catalogError = false;
+            try { catalog = await _catalogs.GetCatalogAsync(token); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+            catch { catalogError = true; }
             if (session is null)
             {
-                SetState(new CommerceState(CommerceStatus.SignedOut, Catalog: catalog));
+                SetState(new CommerceState(CommerceStatus.SignedOut, Catalog: catalog, CatalogError: catalogError));
                 return;
             }
 
-            SetState(new CommerceState(CommerceStatus.Ready, session, catalog));
+            SetState(new CommerceState(CommerceStatus.Ready, session, catalog, CatalogError: catalogError));
+            StartSyncLoop();
+            await RefreshAccountAsync(token);
         }, cancellationToken);
 
     public Task SignInAsync(CancellationToken cancellationToken = default) =>
@@ -104,8 +115,9 @@ public sealed class CommerceCoordinator : IDisposable
             try { catalog = await _catalogs.GetCatalogAsync(token); }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
             catch { /* Catalog availability must not discard the authenticated session. */ }
-            await TryRefreshFeatureAccessAsync(token);
             SetState(new CommerceState(CommerceStatus.Ready, session, catalog));
+            StartSyncLoop();
+            await RefreshAccountAsync(token);
         }, cancellationToken);
 
     public Task SignOutAsync(CancellationToken cancellationToken = default) =>
@@ -120,7 +132,13 @@ public sealed class CommerceCoordinator : IDisposable
                 _featureAccess.Invalidate();
             }
 
-            SetState(State with { Status = CommerceStatus.SignedOut, Account = null });
+            SetState(State with { Status = CommerceStatus.SignedOut, Account = null,
+                Subscription = null, PendingCheckout = null, LastSyncedAtUtc = null,
+                SubscriptionError = null, SyncError = false });
+            var syncCancellation = _syncCancellation;
+            _syncCancellation = null;
+            syncCancellation?.Cancel();
+            _syncLoop = null;
         }, cancellationToken);
 
     public Task StartCheckoutAsync(string offerId, CancellationToken cancellationToken = default) =>
@@ -134,7 +152,8 @@ public sealed class CommerceCoordinator : IDisposable
 
             var checkout = await _commerce.CreateCheckoutAsync(offerId, token);
             _launcher.Open(checkout.CheckoutUri);
-            SetState(current with { Status = CommerceStatus.CheckoutOpened });
+            SetState(current with { Status = CommerceStatus.CheckoutOpened, PendingCheckout = checkout });
+            StartSyncLoop();
         }, cancellationToken);
 
     public Task RestorePurchasesAsync(CancellationToken cancellationToken = default) =>
@@ -142,14 +161,92 @@ public sealed class CommerceCoordinator : IDisposable
         {
             if (State.Account is null)
             {
-                throw new InvalidOperationException("Sign in before restoring purchases.");
+                var catalog = await _catalogs.GetCatalogAsync(token);
+                SetState(State with { Status = CommerceStatus.SignedOut, Catalog = catalog, CatalogError = false });
+                return;
             }
 
-            await _commerce.RestorePurchasesAsync(token);
-            await TryRefreshFeatureAccessAsync(token);
-            var catalog = await _catalogs.GetCatalogAsync(token);
-            SetState(State with { Status = CommerceStatus.Ready, Catalog = catalog });
+            await RefreshAccountAsync(token);
         }, cancellationToken);
+
+    private async Task RefreshAccountAsync(CancellationToken token)
+    {
+        var syncError = false;
+        try { await _commerce.RestorePurchasesAsync(token); }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch { syncError = true; }
+        SubscriptionSummary? subscription = null;
+        SubscriptionSyncException? subscriptionError = null;
+        try
+        {
+            subscription = await _commerce.GetSubscriptionAsync(token)
+                ?? throw new SubscriptionSyncException("subscription-invalid-response");
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        {
+            subscriptionError = exception as SubscriptionSyncException
+                ?? new SubscriptionSyncException("subscription-unavailable", exception);
+        }
+        await TryRefreshFeatureAccessAsync(token);
+        var pending = State.PendingCheckout;
+        if (subscription is not null)
+            pending = subscription.PendingCheckout is { } remote
+                ? new CheckoutSession(new Uri(remote.CheckoutUri), remote.ExpiresAtUtc,
+                    new Uri(remote.CheckoutUri).IsLoopback)
+                : null;
+        if (pending?.ExpiresAtUtc <= _timeProvider.GetUtcNow()) pending = null;
+        ProductCatalog? catalog = State.Catalog;
+        var catalogError = false;
+        try { catalog = await _catalogs.GetCatalogAsync(token); }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+        catch { catalogError = true; }
+        SetState(State with { Status = pending is null ? CommerceStatus.Ready : CommerceStatus.CheckoutOpened,
+            Subscription = subscription ?? State.Subscription, PendingCheckout = pending, Catalog = catalog,
+            CatalogError = catalogError, SyncError = syncError, SubscriptionError = subscriptionError?.Code,
+            LastSyncedAtUtc = subscription is null ? State.LastSyncedAtUtc : _timeProvider.GetUtcNow() });
+        if (subscriptionError is not null) throw subscriptionError;
+    }
+
+    private void StartSyncLoop()
+    {
+        if (_syncLoop is { IsCompleted: false }) return;
+        _syncCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        _syncLoop = SyncLoopAsync(_syncCancellation);
+    }
+
+    private async Task SyncLoopAsync(CancellationTokenSource cancellation)
+    {
+        var syncToken = cancellation.Token;
+        var lastAttempt = _timeProvider.GetUtcNow();
+        try
+        {
+            // A short heartbeat also notices a newly opened checkout without replacing timers.
+            while (!syncToken.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(10), _timeProvider, syncToken);
+                if (State.Account is null) continue;
+                if (!await _gate.WaitAsync(0, syncToken)) continue;
+                try
+                {
+                    if (State.Account is null) continue;
+                    if (State.PendingCheckout?.ExpiresAtUtc <= _timeProvider.GetUtcNow())
+                        SetState(State with { PendingCheckout = null, Status = CommerceStatus.Ready });
+                    var interval = State.PendingCheckout is null ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(10);
+                    if (_timeProvider.GetUtcNow() - lastAttempt < interval) continue;
+                    lastAttempt = _timeProvider.GetUtcNow();
+                    SetState(State with { Status = CommerceStatus.Loading });
+                    await RefreshAccountAsync(syncToken);
+                }
+                catch (OperationCanceledException) when (syncToken.IsCancellationRequested) { break; }
+                catch (SubscriptionSyncException) { SetState(State with { Status = CommerceStatus.Error }); }
+                catch { SetState(State with { SyncError = true }); }
+                finally { _gate.Release(); }
+            }
+        }
+        catch (OperationCanceledException) when (syncToken.IsCancellationRequested) { }
+        finally { cancellation.Dispose(); }
+    }
 
     private async Task TryRefreshFeatureAccessAsync(CancellationToken cancellationToken)
     {

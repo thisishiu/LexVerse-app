@@ -73,6 +73,52 @@ public sealed class RemoteCommerceBackend : ICommerceBackend
             _httpClient, request, MaximumResponseBytes, _timeout, cancellationToken);
     }
 
+    public async Task<SubscriptionSummary?> GetSubscriptionAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var endpoint = new Uri(_checkoutEndpoint, "../me/subscription");
+            using var request = await CreateAuthorizedRequestAsync(HttpMethod.Get, endpoint, cancellationToken);
+            var bytes = await HttpJson.ReadBoundedAsync(
+                _httpClient, request, MaximumResponseBytes, _timeout, cancellationToken);
+            var summary = JsonSerializer.Deserialize<SubscriptionSummary>(bytes, JsonOptions);
+            if (summary?.Current is null || summary.Upcoming is null ||
+                !ValidPeriod(summary.Current) || summary.Upcoming.Any(period => !ValidPeriod(period)) ||
+                summary.SyncedAtUtc == default || (summary.PendingCheckout is { } pending &&
+                    (!Uri.TryCreate(pending.CheckoutUri, UriKind.Absolute, out var checkout) ||
+                     !(checkout.Scheme == Uri.UriSchemeHttps || (checkout.IsLoopback &&
+                         checkout.Scheme == Uri.UriSchemeHttp &&
+                         LexVerse.Infrastructure.Configuration.BackendEndpointPolicy.AllowInsecureLocalhost)) ||
+                     pending.ExpiresAtUtc == default)))
+                throw new SubscriptionSyncException("subscription-invalid-response");
+            return summary;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException exception)
+        {
+            throw new SubscriptionSyncException("subscription-timeout", exception);
+        }
+        catch (HttpRequestException exception)
+        {
+            var code = exception.StatusCode switch
+            {
+                System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden => "subscription-sign-in-required",
+                System.Net.HttpStatusCode.NotFound => "subscription-endpoint-unavailable",
+                _ => "subscription-unavailable"
+            };
+            throw new SubscriptionSyncException(code, exception);
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException)
+        {
+            throw new SubscriptionSyncException("subscription-invalid-response", exception);
+        }
+    }
+
+    private static bool ValidPeriod(SubscriptionPeriodSummary? period) => period is not null &&
+        !string.IsNullOrWhiteSpace(period.Id) && !string.IsNullOrWhiteSpace(period.PlanId) &&
+        !string.IsNullOrWhiteSpace(period.DisplayName) && period.StartsAtUtc != default &&
+        period.EndsAtUtc > period.StartsAtUtc;
+
     private async Task<HttpRequestMessage> CreateAuthorizedRequestAsync(
         HttpMethod method,
         Uri endpoint,

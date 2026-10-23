@@ -213,6 +213,11 @@ public partial class MainWindow
         {
             PostDesktopResult(command.Id, false, errorCode: exception.ErrorCode);
         }
+        catch (LexVerse.Application.Commerce.SubscriptionSyncException exception)
+        {
+            PostDesktopResult(command.Id, false, errorCode: exception.Code);
+            PublishDesktopSnapshot();
+        }
         catch (JsonException)
         {
             PostDesktopResult(command.Id, false, errorCode: "invalid-payload");
@@ -592,6 +597,15 @@ public partial class MainWindow
 
                 displayName = commerce.Account?.DisplayName,
                 authentication = _commerce.Authentication,
+                subscription = commerce.Subscription,
+                lastSyncedAtUtc = commerce.LastSyncedAtUtc,
+                pendingCheckout = commerce.PendingCheckout is { } pendingCheckout ? new {
+                    checkoutUri = pendingCheckout.CheckoutUri.AbsoluteUri,
+                    expiresAtUtc = pendingCheckout.ExpiresAtUtc
+                } : null,
+                catalogError = commerce.CatalogError,
+                syncError = commerce.SyncError,
+                subscriptionError = commerce.SubscriptionError,
                 offers
             }
         };

@@ -109,6 +109,13 @@ export interface DesktopSnapshot {
     status: string;
     displayName?: string;
     authentication?: { status: string; error?: string };
+    subscription?: { current: { id: string; planId: string; displayName: string; startsAtUtc: string; endsAtUtc: string };
+      upcoming: { id: string; planId: string; displayName: string; startsAtUtc: string; endsAtUtc: string }[] };
+    lastSyncedAtUtc?: string;
+    pendingCheckout?: { checkoutUri: string; expiresAtUtc: string };
+    catalogError?: boolean;
+    syncError?: boolean;
+    subscriptionError?: string;
     offers: OfferSnapshot[];
   };
 }
