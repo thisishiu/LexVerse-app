@@ -146,7 +146,8 @@ public partial class TranslationPopupWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        _ = SetWindowDisplayAffinity(new WindowInteropHelper(this).Handle, WdaExcludeFromCapture);
+        // Temporarily disabled for demo recording; restore capture exclusion afterward.
+        // _ = SetWindowDisplayAffinity(new WindowInteropHelper(this).Handle, WdaExcludeFromCapture);
         if (GetCursorPos(out var cursor))
             SetWindowPos(new WindowInteropHelper(this).Handle, IntPtr.Zero, cursor.X + 18, cursor.Y + 18, 0, 0, 0x0015);
     }

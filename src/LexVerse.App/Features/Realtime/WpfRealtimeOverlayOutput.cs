@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using LexVerse.Application.Desktop;
@@ -17,6 +19,12 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
     private const double VerticalPadding = 2;
     private const double MinFontSize = 8;
     private readonly ObservableCollection<TextItem> _items = [];
+    private readonly OverlayItemCollection _itemCollection;
+    private readonly OverlayTextLayoutCache _layoutCache = new();
+    private long _generation;
+    private Guid _sessionId;
+    private long _frameSequence;
+    private bool _lastIsPartial;
     private readonly Dispatcher _dispatcher;
     private readonly IDesktopPreferencesService _preferences;
     private OverlayWindow? _window;
@@ -24,15 +32,77 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
     private bool _disposed;
     private readonly DispatcherTimer _windowTimer;
     private readonly Win32WindowTracker _tracker = new();
+    private Window? _mainWindow;
+    private bool? _originalMainWindowTopmost;
+
+    internal void AttachMainWindow(Window window)
+    {
+        _dispatcher.VerifyAccess();
+        DetachMainWindow();
+        _mainWindow = window;
+        window.Activated += MainWindowLayerChanged;
+        window.Deactivated += MainWindowLayerChanged;
+        window.StateChanged += MainWindowLayerChanged;
+        window.IsVisibleChanged += WindowVisibilityChanged;
+        window.Closed += MainWindowClosed;
+        SynchronizeMainWindowLayer();
+    }
+
+    private void MainWindowLayerChanged(object? sender, EventArgs e) => SynchronizeMainWindowLayer();
+
+    private void WindowVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e) =>
+        SynchronizeMainWindowLayer();
+
+    private void MainWindowClosed(object? sender, EventArgs e) => DetachMainWindow();
+
+    private void RestoreMainWindowLayer()
+    {
+        if (_mainWindow is not null && _originalMainWindowTopmost is { } original)
+        {
+            _originalMainWindowTopmost = null;
+            if (_mainWindow.Topmost != original)
+                _mainWindow.SetCurrentValue(Window.TopmostProperty, original);
+        }
+    }
+
+    private void DetachMainWindow()
+    {
+        if (_window is not null) _window.PriorityWindow = IntPtr.Zero;
+        RestoreMainWindowLayer();
+        if (_mainWindow is not { } window) return;
+        window.Activated -= MainWindowLayerChanged;
+        window.Deactivated -= MainWindowLayerChanged;
+        window.StateChanged -= MainWindowLayerChanged;
+        window.IsVisibleChanged -= WindowVisibilityChanged;
+        window.Closed -= MainWindowClosed;
+        _mainWindow = null;
+    }
+
+    private void SynchronizeMainWindowLayer(bool preparingToShow = false)
+    {
+        if (_mainWindow is not { IsActive: true, IsVisible: true } main ||
+            main.WindowState == WindowState.Minimized || _window is null ||
+            (!_window.IsVisible && !preparingToShow))
+        {
+            if (_window is not null) _window.PriorityWindow = IntPtr.Zero;
+            RestoreMainWindowLayer();
+            return;
+        }
+
+        _originalMainWindowTopmost ??= main.Topmost;
+        if (!main.Topmost) main.SetCurrentValue(Window.TopmostProperty, true);
+        _window.PriorityWindow = new WindowInteropHelper(main).Handle;
+    }
 
     public WpfRealtimeOverlayOutput(
         Dispatcher dispatcher,
         IDesktopPreferencesService preferences)
     {
+        _itemCollection = new OverlayItemCollection(_items);
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _preferences.Changed += Preferences_Changed;
-        _windowTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Render,
+        _windowTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Background,
             (_, _) => UpdateWindowPlacement(), dispatcher);
         _windowTimer.Stop();
     }
@@ -43,29 +113,49 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(update);
-        return RunOnUiAsync(() => RenderOnUi(update.OverlayFrame), cancellationToken);
+        var generation = Interlocked.Read(ref _generation);
+        return RunOnUiAsync(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_disposed || generation != Interlocked.Read(ref _generation)) return;
+            if (_sessionId == update.SessionId && update.FrameSequence < _frameSequence) return;
+            _sessionId = update.SessionId;
+            _frameSequence = update.FrameSequence;
+            RenderOnUi(update.OverlayFrame, isPartial);
+        }, cancellationToken);
     }
 
-    public Task ClearAsync(CancellationToken cancellationToken = default) =>
-        RunOnUiAsync(ClearOnUi, cancellationToken);
+    public Task ClearAsync(CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _generation);
+        return RunOnUiAsync(ClearOnUi, cancellationToken);
+    }
 
-    private void RenderOnUi(OverlayRenderFrame frame)
+    private void RenderOnUi(OverlayRenderFrame frame, bool isPartial = false)
     {
         _lastFrame = frame;
+        _lastIsPartial = isPartial;
         if (frame.Trace is null)
         {
-            _window?.Hide();
+            InvalidateWindowFrame();
             return;
         }
 
-        _window ??= new OverlayWindow(_items);
+        if (_window is null)
+        {
+            _window = new OverlayWindow(_items);
+            _window.IsVisibleChanged += WindowVisibilityChanged;
+        }
         _window.TargetWindow = frame.WindowTarget?.Hwnd ?? IntPtr.Zero;
-        _window.Topmost = frame.WindowTarget is null;
+        SynchronizeMainWindowLayer(preparingToShow: true);
+        var topmost = frame.WindowTarget is null;
+        if (_window.Topmost != topmost) _window.Topmost = topmost;
         if (frame.WindowTarget is not null)
         {
             _windowTimer.Start();
             if (!IsFrameCurrent(frame)) { InvalidateWindowFrame(); return; }
         }
+        else _windowTimer.Stop();
         _window.SetPhysicalBounds(
             frame.Trace.Geometry.SourceScreenRect,
             frame.Trace.Geometry.DpiScaleX,
@@ -77,15 +167,10 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
             _window.Show();
         }
 
-        var nextItems = frame.Items.Select(CreateTextItem)
-            .Where(item => item.Width > 0 && item.Height > 0).ToList();
-        if (_preferences.Current.ShowOcrDebugBoxes)
-        {
-            nextItems.AddRange(frame.Items.Select(CreateDebugItem)
-                .Where(item => item.Width > 0 && item.Height > 0));
-        }
-
-        ReconcileItems(nextItems);
+        _itemCollection.Update(frame, isPartial, new OverlayRenderSettings(
+            VisualTreeHelper.GetDpi(_window).PixelsPerDip, _preferences.Current.OverlayFontScalePercent,
+            _preferences.Current.UseDarkOverlayBlocks, _preferences.Current.ShowOcrDebugBoxes),
+            CreateTextItem, CreateDebugItem);
         UpdateWindowPlacement();
     }
 
@@ -119,9 +204,12 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
 
     private void InvalidateWindowFrame()
     {
+        _windowTimer.Stop();
         _window?.Hide();
         _lastFrame = null;
-        _items.Clear();
+        _sessionId = Guid.Empty;
+        _frameSequence = 0;
+        _itemCollection.Clear();
     }
 
     private TextItem CreateTextItem(OverlayTextItem item)
@@ -137,7 +225,7 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
         var fontRect = window.ScreenPhysicalToLocalDip(
             new(0, 0, 1, Math.Max(1, item.FontSize)));
         var fontScale = _preferences.Current.OverlayFontScalePercent / 100d;
-        var layout = OverlayTextLayoutCalculator.Calculate(
+        var layout = _layoutCache.Calculate(
             item.TranslatedText,
             targetRect.Width,
             targetRect.Height,
@@ -190,46 +278,21 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
         };
     }
 
-    private void ReconcileItems(IReadOnlyList<TextItem> nextItems)
-    {
-        for (var index = 0; index < nextItems.Count; index++)
-        {
-            if (index >= _items.Count)
-            {
-                _items.Add(nextItems[index]);
-                continue;
-            }
-
-            Copy(nextItems[index], _items[index]);
-        }
-
-        while (_items.Count > nextItems.Count)
-        {
-            _items.RemoveAt(_items.Count - 1);
-        }
-    }
-
-    private static void Copy(TextItem source, TextItem target)
-    {
-        target.Text = source.Text;
-        target.X = source.X;
-        target.Y = source.Y;
-        target.Width = source.Width;
-        target.Height = source.Height;
-        target.MinHeight = source.MinHeight;
-        target.FontSize = source.FontSize;
-        target.Background = source.Background;
-        target.BorderBrush = source.BorderBrush;
-        target.Foreground = source.Foreground;
-    }
-
     private void ClearOnUi()
     {
         _windowTimer.Stop();
         _lastFrame = null;
-        _window?.Close();
+        _sessionId = Guid.Empty;
+        _frameSequence = 0;
+        if (_window is not null)
+        {
+            _window.IsVisibleChanged -= WindowVisibilityChanged;
+            _window.Close();
+        }
         _window = null;
-        _items.Clear();
+        RestoreMainWindowLayer();
+        _itemCollection.Clear();
+        _layoutCache.Clear();
     }
 
     private Task RunOnUiAsync(Action action, CancellationToken cancellationToken)
@@ -259,7 +322,7 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
             {
                 if (!_disposed && _lastFrame is { } frame)
                 {
-                    RenderOnUi(frame);
+                    RenderOnUi(frame, _lastIsPartial);
                 }
             },
             DispatcherPriority.Render);
@@ -277,10 +340,15 @@ public sealed class WpfRealtimeOverlayOutput : IRealtimeOutput, IDisposable
         if (_dispatcher.CheckAccess())
         {
             ClearOnUi();
+            DetachMainWindow();
         }
         else if (!_dispatcher.HasShutdownStarted)
         {
-            _dispatcher.Invoke(ClearOnUi);
+            _dispatcher.Invoke(() =>
+            {
+                ClearOnUi();
+                DetachMainWindow();
+            });
         }
     }
 }

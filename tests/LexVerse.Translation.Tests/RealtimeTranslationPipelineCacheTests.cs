@@ -11,6 +11,58 @@ namespace LexVerse.Translation.Tests;
 
 public sealed class RealtimeTranslationPipelineCacheTests
 {
+    [Fact]
+    public async Task SamePixelsWithChangedGeometryDoNotReuseOcr()
+    {
+        var first = CreateFrame();
+        var second = CreateFrame() with { Geometry = first.Geometry with { DpiScaleX = 1.5, Version = 1 } };
+        var ocr = new FakeOcrService();
+        var pipeline = new RealtimeTranslationPipeline(new FakeCaptureSession(first, second),
+            new ExactFrameChangeDetector(), ocr, new FakeTextTranslator(), new InMemoryTranslationCache(),
+            RealtimeTranslationOptions.Document);
+        await pipeline.CaptureRecognizeAndTranslateAsync(TestContext.Current.CancellationToken);
+        var result = await pipeline.CaptureRecognizeAndTranslateAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, ocr.CallCount);
+        Assert.False(result.Ocr.UsedCachedOcrResult);
+    }
+
+    [Fact]
+    public async Task SamePixelsWithChangedRegionReevaluateOcrInput()
+    {
+        var regions = new MutableRegions();
+        var ocr = new FakeOcrService();
+        var pipeline = new RealtimeTranslationPipeline(new FakeCaptureSession(CreateFrame(), CreateFrame()),
+            new ExactFrameChangeDetector(), ocr, new FakeTextTranslator(), new InMemoryTranslationCache(),
+            RealtimeTranslationOptions.Document, regions);
+        await pipeline.CaptureRecognizeAndTranslateAsync(TestContext.Current.CancellationToken);
+        regions.X = 8;
+        var result = await pipeline.CaptureRecognizeAndTranslateAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, ocr.CallCount);
+        Assert.False(result.Ocr.UsedCachedOcrResult);
+    }
+
+    [Fact]
+    public async Task RepeatedFramesKeepOcrAndTranslationCallsConstant()
+    {
+        var ocr = new FakeOcrService();
+        var translator = new FakeTextTranslator();
+        var pipeline = new RealtimeTranslationPipeline(new FakeCaptureSession(
+                Enumerable.Range(0, 120).Select(_ => CreateFrame()).ToArray()),
+            new ExactFrameChangeDetector(), ocr, translator, new InMemoryTranslationCache(),
+            RealtimeTranslationOptions.Document);
+        for (var index = 0; index < 120; index++)
+            await pipeline.CaptureRecognizeAndTranslateAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(1, ocr.CallCount);
+        Assert.Equal(1, translator.CallCount);
+    }
+
+    private sealed class MutableRegions : IOcrRegionProvider
+    {
+        public int X { get; set; }
+        public IReadOnlyList<OcrRegion> GetRegions(CapturedFrame frame) =>
+            [new OcrRegion("test", X, 0, 4, 4, OcrProcessingMode.Document)];
+    }
+
     [Theory]
     [InlineData(OcrProcessingMode.FullScreen)]
     [InlineData(OcrProcessingMode.Document)]

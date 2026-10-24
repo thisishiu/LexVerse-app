@@ -133,7 +133,7 @@ public sealed class WindowsGraphicsCaptureSession : IScreenCaptureSession
             }
 
             sender.FrameArrived -= OnFrameArrived;
-            completion.TrySetResult(frame);
+            if (!completion.TrySetResult(frame)) frame.Dispose();
         }
 
         _framePool.FrameArrived += OnFrameArrived;

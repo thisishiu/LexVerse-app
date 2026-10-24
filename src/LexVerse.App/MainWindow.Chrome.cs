@@ -15,7 +15,9 @@ public partial class MainWindow
         _startupChromeRestored = true;
         CaptionRow.Height = new GridLength(36);
         CaptionBar.Visibility = Visibility.Visible;
-        ResizeMode = ResizeMode.CanResize;
+        // Keep WindowStyle/ResizeMode fixed for the lifetime of the HWND. Changing
+        // native window styles here can bring back the system caption buttons
+        // alongside our custom caption during a non-client frame refresh.
         var chrome = WindowChrome.GetWindowChrome(this);
         chrome.CaptionHeight = 36;
         chrome.ResizeBorderThickness = new Thickness(6);

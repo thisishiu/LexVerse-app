@@ -15,6 +15,65 @@ namespace LexVerse.Translation.Tests;
 public sealed class RealtimeTranslationCoordinatorTests
 {
     [Fact]
+    public async Task CancellingWindowIterationCancelsQueuedPartialWithoutStoppingSession()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var session = new FakeSession();
+        var output = new QueuedPartialOutput();
+        await using var coordinator = CreateCoordinator(true, new FakeSessionFactory(session), output);
+        await coordinator.StartAsync(CreateRequest(), token);
+        await output.FinalRendered.Task.WaitAsync(token);
+        using var iteration = CancellationTokenSource.CreateLinkedTokenSource(token);
+        var render = session.PartialHandler!(CreateUpdate(), iteration.Token);
+        await output.PartialQueued.Task.WaitAsync(token);
+        iteration.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => render);
+        Assert.Equal(RealtimeCoordinatorStatus.Running, coordinator.State.Status);
+        await coordinator.StopAsync(token);
+    }
+
+    [Fact]
+    public async Task CancelledSessionCannotRenderLatePartialIntoNewSession()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var first = new FakeSession();
+        var second = new FakeSession();
+        var output = new FakeOutput();
+        await using var coordinator = CreateCoordinator(true, new FakeSessionFactory(first, second), output);
+        await coordinator.StartAsync(CreateRequest(), token);
+        await output.FirstRender.Task.WaitAsync(token);
+        var oldSessionId = output.Rendered.Single().SessionId;
+        Assert.NotEqual(Guid.Empty, oldSessionId);
+        await coordinator.StartAsync(CreateRequest(), token);
+        await output.SecondRender.Task.WaitAsync(token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first.PartialHandler!(CreateUpdate(), token));
+        await coordinator.StopAsync(token);
+        Assert.All(output.Rendered, update => Assert.Equal(1, update.FrameSequence));
+        Assert.Equal(2, output.Rendered.Select(update => update.SessionId).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task ProcessingDoesNotInheritCallerSynchronizationContext()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var session = new FakeSession();
+        var output = new FakeOutput();
+        await using var coordinator = CreateCoordinator(true, new FakeSessionFactory(session), output);
+        var original = SynchronizationContext.Current;
+        Task start;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(new SynchronizationContext());
+            start = coordinator.StartAsync(CreateRequest(), token);
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(original); }
+        await start;
+        await output.FirstRender.Task.WaitAsync(token);
+        Assert.Null(session.ProcessContext);
+        await coordinator.StopAsync(token);
+    }
+
+    [Fact]
     public async Task ClosedWindowStopsAndReleasesCapture()
     {
         var token = TestContext.Current.CancellationToken;
@@ -321,11 +380,15 @@ public sealed class RealtimeTranslationCoordinatorTests
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public bool Disposed { get; private set; }
+        public SynchronizationContext? ProcessContext { get; private set; }
+        public Func<RealtimeFrameUpdate, CancellationToken, Task>? PartialHandler { get; private set; }
 
         public Task<RealtimeFrameUpdate> ProcessNextAsync(
             Func<RealtimeFrameUpdate, CancellationToken, Task>? partialResultHandler = null,
             CancellationToken cancellationToken = default)
         {
+            ProcessContext = SynchronizationContext.Current;
+            PartialHandler = partialResultHandler;
             FirstProcess.TrySetResult();
             return throwOnProcess || failure is not null
                 ? Task.FromException<RealtimeFrameUpdate>(failure ?? new InvalidOperationException("pipeline failed"))
@@ -349,8 +412,11 @@ public sealed class RealtimeTranslationCoordinatorTests
 
         public TaskCompletionSource TwentyFirstRender { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource SecondRender { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         private int _renderCount;
+        public ConcurrentQueue<RealtimeFrameUpdate> Rendered { get; } = new();
 
         public int ClearCount { get; private set; }
 
@@ -359,8 +425,11 @@ public sealed class RealtimeTranslationCoordinatorTests
             bool isPartial,
             CancellationToken cancellationToken = default)
         {
+            Rendered.Enqueue(update);
             FirstRender.TrySetResult();
-            if (Interlocked.Increment(ref _renderCount) >= 21)
+            var count = Interlocked.Increment(ref _renderCount);
+            if (count == 2) SecondRender.TrySetResult();
+            if (count >= 21)
             {
                 TwentyFirstRender.TrySetResult();
             }
@@ -379,5 +448,20 @@ public sealed class RealtimeTranslationCoordinatorTests
         public ConcurrentQueue<OperationalEvent> Events { get; } = new();
 
         public void Record(OperationalEvent operationalEvent) => Events.Enqueue(operationalEvent);
+    }
+
+    private sealed class QueuedPartialOutput : IRealtimeOutput
+    {
+        public TaskCompletionSource FinalRendered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource PartialQueued { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task RenderAsync(RealtimeFrameUpdate update, bool isPartial, CancellationToken cancellationToken = default)
+        {
+            if (!isPartial) { FinalRendered.TrySetResult(); return; }
+            PartialQueued.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        public Task ClearAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

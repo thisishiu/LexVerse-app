@@ -18,7 +18,30 @@ namespace LexVerse.Overlay
         private ScreenRect? _pendingPhysicalBounds;
         private double _boundsDpiScaleX = 1;
         private double _boundsDpiScaleY = 1;
+        private ScreenRect? _appliedPhysicalBounds;
+        private double? _rotationAngle;
+        private (ScreenRect Bounds, IntPtr Target, IntPtr InsertAfter)? _layerState;
+        private List<Occlusion> _occlusions = [];
+        public bool IsExcludedFromCapture { get; private set; }
         public IntPtr TargetWindow { get; set; }
+        private IntPtr _priorityWindow;
+        public IntPtr PriorityWindow
+        {
+            get => _priorityWindow;
+            set
+            {
+                if (_priorityWindow == value) return;
+                _priorityWindow = value;
+                if (!IsLoaded || TargetWindow != IntPtr.Zero) return;
+                _ = SetWindowPos(new WindowInteropHelper(this).Handle,
+                    GetBoundsInsertAfter(TargetWindow, value), 0, 0, 0, 0,
+                    0x0001 | 0x0002 | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+            }
+        }
+
+        internal static IntPtr GetBoundsInsertAfter(IntPtr targetWindow, IntPtr priorityWindow) =>
+            targetWindow != IntPtr.Zero ? new IntPtr(-2) :
+            priorityWindow != IntPtr.Zero ? priorityWindow : HWND_TOPMOST;
 
         public MainWindow()
             : this(new ObservableCollection<TextItem>())
@@ -62,7 +85,9 @@ namespace LexVerse.Overlay
             int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
             exStyle |= WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
             SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-            _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+            IsExcludedFromCapture = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+            if (!IsExcludedFromCapture)
+                System.Diagnostics.Trace.TraceWarning("Overlay capture exclusion failed: {0}", Marshal.GetLastWin32Error());
         }
 
         public void SetPhysicalBounds(ScreenRect physicalBounds)
@@ -85,6 +110,9 @@ namespace LexVerse.Overlay
                 throw new ArgumentOutOfRangeException(nameof(dpiScaleY), "DPI scale must be greater than zero.");
             }
 
+            if (IsLoaded && _appliedPhysicalBounds == physicalBounds &&
+                _boundsDpiScaleX == dpiScaleX && _boundsDpiScaleY == dpiScaleY) return;
+
             _boundsDpiScaleX = dpiScaleX;
             _boundsDpiScaleY = dpiScaleY;
 
@@ -99,7 +127,7 @@ namespace LexVerse.Overlay
             Top = physicalBounds.Y / dpiScaleY;
             Width = physicalBounds.Width / dpiScaleX;
             Height = physicalBounds.Height / dpiScaleY;
-            SetWindowPosToPhysicalBounds(physicalBounds);
+            _appliedPhysicalBounds = SetWindowPosToPhysicalBounds(physicalBounds) ? physicalBounds : null;
             _pendingPhysicalBounds = null;
         }
 
@@ -116,22 +144,24 @@ namespace LexVerse.Overlay
             var normalizedAngle = double.IsFinite(clockwiseAngle) && Math.Abs(clockwiseAngle) >= 0.01
                 ? clockwiseAngle
                 : 0;
+            if (_rotationAngle == normalizedAngle) return;
+            _rotationAngle = normalizedAngle;
             OverlayItemsControl.RenderTransform = normalizedAngle == 0
                 ? Transform.Identity
                 : new RotateTransform(normalizedAngle);
         }
 
-        private void SetWindowPosToPhysicalBounds(ScreenRect physicalBounds)
+        private bool SetWindowPosToPhysicalBounds(ScreenRect physicalBounds)
         {
             var hwnd = new WindowInteropHelper(this).Handle;
             if (hwnd == IntPtr.Zero)
             {
-                return;
+                return false;
             }
 
-            _ = SetWindowPos(
+            return SetWindowPos(
                 hwnd,
-                TargetWindow == IntPtr.Zero ? HWND_TOPMOST : new IntPtr(-2),
+                GetBoundsInsertAfter(TargetWindow, PriorityWindow),
                 (int)Math.Round(physicalBounds.X),
                 (int)Math.Round(physicalBounds.Y),
                 (int)Math.Round(physicalBounds.Width),
@@ -144,9 +174,9 @@ namespace LexVerse.Overlay
         {
             if (TargetWindow == IntPtr.Zero || !IsLoaded) return;
             var hwnd = new WindowInteropHelper(this).Handle;
-            var region = CreateRectRgn(0, 0, (int)Math.Ceiling(bounds.Width), (int)Math.Ceiling(bounds.Height));
             var previous = GetWindow(TargetWindow, 3); // GW_HWNDPREV
             var insertAfter = IntPtr.Zero;
+            var occlusions = new List<Occlusion>();
             for (var other = previous; other != IntPtr.Zero; other = GetWindow(other, 3))
             {
                 if (other == hwnd) continue;
@@ -154,14 +184,31 @@ namespace LexVerse.Overlay
                 if (!IsWindowVisible(other) || IsIconic(other)) continue;
                 if (DwmGetWindowAttribute(other, 14, out var cloaked, sizeof(int)) == 0 && cloaked != 0) continue;
                 if (!GetWindowRect(other, out var rect)) continue;
+                if (rect.Right <= bounds.X || rect.Left >= bounds.Right ||
+                    rect.Bottom <= bounds.Y || rect.Top >= bounds.Bottom) continue;
+                occlusions.Add(new Occlusion(other, rect.Left, rect.Top, rect.Right, rect.Bottom));
+            }
+            var state = (bounds, TargetWindow, insertAfter);
+            if (_layerState == state && _occlusions.SequenceEqual(occlusions) &&
+                GetWindow(hwnd, 3) == insertAfter) return;
+            var region = CreateRectRgn(0, 0, (int)Math.Ceiling(bounds.Width), (int)Math.Ceiling(bounds.Height));
+            if (region == IntPtr.Zero) return;
+            foreach (var rect in occlusions)
+            {
                 var cut = CreateRectRgn(rect.Left - (int)bounds.X, rect.Top - (int)bounds.Y,
                     rect.Right - (int)bounds.X, rect.Bottom - (int)bounds.Y);
-                _ = CombineRgn(region, region, cut, 4); // RGN_DIFF
+                if (cut == IntPtr.Zero) { _ = DeleteObject(region); return; }
+                var combined = CombineRgn(region, region, cut, 4); // RGN_DIFF
                 _ = DeleteObject(cut);
+                if (combined == 0) { _ = DeleteObject(region); return; }
             }
-            if (SetWindowRgn(hwnd, region, true) == 0) _ = DeleteObject(region);
-            _ = SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0, 0x0001 | 0x0002 | SWP_NOACTIVATE);
+            if (SetWindowRgn(hwnd, region, true) == 0) { _ = DeleteObject(region); return; }
+            if (!SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0, 0x0001 | 0x0002 | SWP_NOACTIVATE)) return;
+            _layerState = state;
+            _occlusions = occlusions;
         }
+
+        private readonly record struct Occlusion(IntPtr Handle, int Left, int Top, int Right, int Bottom);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct NativeRect { public int Left, Top, Right, Bottom; }

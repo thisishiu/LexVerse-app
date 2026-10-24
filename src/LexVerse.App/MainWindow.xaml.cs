@@ -100,6 +100,7 @@ public partial class MainWindow : Window
         _desktopPreferences = desktopPreferences;
         _realtimeOutput = realtimeOutput;
         InitializeComponent();
+        _realtimeOutput.AttachMainWindow(this);
         InitializeHybridUiHost();
         ApplyDesktopPreferences(_desktopPreferences.Current);
         _moduleCount = modules.Modules.Count;
@@ -359,11 +360,11 @@ public partial class MainWindow : Window
             await Task.Delay(160);
             var selector = new SelectionOverlayWindow();
             var selected = selector.ShowDialog();
-            WindowState = WindowState.Normal;
-            Activate();
 
             if (selected != true || selector.Selection is not { } selection)
             {
+                WindowState = WindowState.Normal;
+                Activate();
                 _status = "Region selection canceled.";
                 return;
             }

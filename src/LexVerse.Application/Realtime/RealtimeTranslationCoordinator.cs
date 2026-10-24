@@ -78,7 +78,8 @@ public sealed class RealtimeTranslationCoordinator : IAsyncDisposable
                     request,
                     correlationId,
                     OperationalOutcome.Started);
-                run.Task = RunLoopAsync(run, request);
+                // Capture, hashing, OCR preparation and continuation work must not inherit WPF's context.
+                run.Task = Task.Run(() => RunLoopAsync(run, request));
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -172,15 +173,22 @@ public sealed class RealtimeTranslationCoordinator : IAsyncDisposable
             while (!cancellationToken.IsCancellationRequested)
             {
                 var iterationTimer = Stopwatch.StartNew();
+                var sequence = ++run.FrameSequence;
                 var update = await run.Session.ProcessNextAsync(
-                    (partial, token) => _output.RenderAsync(partial, true, token),
+                    (partial, token) => RenderCurrentAsync(partial, true, token),
                     cancellationToken);
                 update = update with
                 {
                     PerformanceBudgetExceeded = budget.IsExceeded(update.Timing)
                 };
-                await _output.RenderAsync(update, false, cancellationToken);
-                FrameProcessed?.Invoke(this, update);
+                update = update with { SessionId = run.CorrelationId, FrameSequence = sequence };
+                await RenderCurrentAsync(update, false, cancellationToken);
+                if (!cancellationToken.IsCancellationRequested && (run.LastNotificationTimestamp == 0 ||
+                    Stopwatch.GetElapsedTime(run.LastNotificationTimestamp) >= TimeSpan.FromMilliseconds(250)))
+                {
+                    run.LastNotificationTimestamp = Stopwatch.GetTimestamp();
+                    FrameProcessed?.Invoke(this, update);
+                }
                 run.FrameCount++;
                 if (update.PerformanceBudgetExceeded)
                 {
@@ -198,6 +206,19 @@ public sealed class RealtimeTranslationCoordinator : IAsyncDisposable
                     request.Options.OcrInterval,
                     iterationTimer.Elapsed,
                     cancellationToken);
+
+                async Task RenderCurrentAsync(RealtimeFrameUpdate frame, bool partial, CancellationToken token)
+                {
+                    token.ThrowIfCancellationRequested();
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!ReferenceEquals(Volatile.Read(ref _activeRun), run)) return;
+                    using var renderCancellation = CancellationTokenSource.CreateLinkedTokenSource(token, cancellationToken);
+                    await _output.RenderAsync(frame with
+                    {
+                        SessionId = run.CorrelationId,
+                        FrameSequence = sequence
+                    }, partial, renderCancellation.Token);
+                }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -376,6 +397,8 @@ public sealed class RealtimeTranslationCoordinator : IAsyncDisposable
         public TimeSpan Elapsed => Stopwatch.GetElapsedTime(_startedTimestamp);
 
         public bool CleanupFailed { get; set; }
+        public long FrameSequence { get; set; }
+        public long LastNotificationTimestamp { get; set; }
 
         public int FrameCount { get; set; }
 

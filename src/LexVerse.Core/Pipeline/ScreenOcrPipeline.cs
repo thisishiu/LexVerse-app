@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using LexVerse.Core.Geometry;
 using LexVerse.Core.Imaging;
 using LexVerse.Core.Ocr;
 using LexVerse.Core.ScreenCapture;
@@ -13,6 +14,7 @@ public sealed class ScreenOcrPipeline
     private readonly IOcrService _ocrService;
     private readonly IOcrRegionProvider? _regionProvider;
     private OcrCacheEntry? _lastOcrCacheEntry;
+    private OcrRegion[] _lastRegions = [];
 
     public ScreenOcrPipeline(
         IScreenCaptureSession captureSession,
@@ -38,9 +40,12 @@ public sealed class ScreenOcrPipeline
 
         var changeDetectionTimer = Stopwatch.StartNew();
         var changed = _changeDetector.HasChanged(frame);
+        var regions = _regionProvider?.GetRegions(frame)
+            .Where(region => region.Width > 0 && region.Height > 0).ToArray() ?? [];
         changeDetectionTimer.Stop();
 
-        if (!changed)
+        if (!changed && _lastOcrCacheEntry?.Geometry == frame.Geometry &&
+            _lastRegions.SequenceEqual(regions))
         {
             totalTimer.Stop();
             return new ScreenOcrPipelineResult(
@@ -60,9 +65,10 @@ public sealed class ScreenOcrPipeline
         }
 
         TimedOcrResult ocrResult;
-        try { ocrResult = await RecognizeFrameOrRegionsAsync(frame, cancellationToken); }
+        try { ocrResult = await RecognizeFrameOrRegionsAsync(frame, regions, cancellationToken); }
         catch (Exception exception) when (exception is not OperationCanceledException)
         { throw new PipelineStageException("ocr", exception); }
+        _lastRegions = regions;
         totalTimer.Stop();
 
         return new ScreenOcrPipelineResult(
@@ -83,13 +89,10 @@ public sealed class ScreenOcrPipeline
 
     private async Task<TimedOcrResult> RecognizeFrameOrRegionsAsync(
         CapturedFrame frame,
+        OcrRegion[] regions,
         CancellationToken cancellationToken)
     {
-        var regions = _regionProvider?.GetRegions(frame)
-            .Where(region => region.Width > 0 && region.Height > 0)
-            .ToArray();
-
-        if (regions is null || regions.Length == 0)
+        if (regions.Length == 0)
         {
             return await RecognizePreparedFrameAsync(frame, TimeSpan.Zero, cancellationToken);
         }
@@ -154,6 +157,7 @@ public sealed class ScreenOcrPipeline
         int Height,
         int Stride,
         PixelFormat PixelFormat,
+        FrameGeometry Geometry,
         OcrResult Result)
     {
         public static OcrCacheEntry Create(CapturedFrame frame, string fingerprint, OcrResult result)
@@ -164,6 +168,7 @@ public sealed class ScreenOcrPipeline
                 frame.Height,
                 frame.Stride,
                 frame.PixelFormat,
+                frame.Geometry,
                 result);
         }
 
@@ -173,6 +178,7 @@ public sealed class ScreenOcrPipeline
                 && Width == frame.Width
                 && Height == frame.Height
                 && Stride == frame.Stride
+                && Geometry == frame.Geometry
                 && PixelFormat == frame.PixelFormat;
         }
     }

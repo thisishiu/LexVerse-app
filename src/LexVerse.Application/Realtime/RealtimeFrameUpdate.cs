@@ -11,5 +11,7 @@ public sealed record RealtimeFrameUpdate(
     bool FrameChanged,
     bool UsedCachedTranslation)
 {
+    public Guid SessionId { get; init; }
+    public long FrameSequence { get; init; }
     public bool PerformanceBudgetExceeded { get; init; }
 }
