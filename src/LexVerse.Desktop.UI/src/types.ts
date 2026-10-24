@@ -22,6 +22,7 @@ export type CommandType =
   | "account.cancelSignIn"
   | "account.signOut"
   | "commerce.checkout"
+  | "commerce.openPlans"
   | "commerce.restore"
   | "external.openHelp";
 
@@ -106,6 +107,7 @@ export interface DesktopSnapshot {
   quickTranslationErrorCode?: string;
   commerce: {
     configured: boolean;
+    plansAvailable?: boolean;
     status: string;
     displayName?: string;
     authentication?: { status: string; error?: string };

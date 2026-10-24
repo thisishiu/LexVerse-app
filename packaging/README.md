@@ -13,6 +13,21 @@ developer localhost settings to this file. The repository-root `.env` and
 
 Run from the repository root on Windows with the .NET SDK and Windows SDK packaging tools installed:
 
+Set `LEXVERSE_PLANS_URL` in `packaging/client.env` to the official public HTTPS
+plans page before packaging. For local development, set the same environment
+variable through the existing dotenv configuration. Example (replace the domain
+and path with the real page):
+
+```dotenv
+LEXVERSE_PLANS_URL=https://example.com/plans
+```
+
+Leave it empty to disable “View plans on the web”. Invalid URLs, non-HTTPS URLs,
+and URLs containing embedded credentials also disable the button. The desktop
+opens this exact public URL in the default browser without adding account data
+or tokens; sign-in and purchases happen on the website. After paying, return to
+the account page and select “Sync access”.
+
 ```powershell
 .\scripts\package-msix.ps1 `
   -Version 1.0.0.0 `

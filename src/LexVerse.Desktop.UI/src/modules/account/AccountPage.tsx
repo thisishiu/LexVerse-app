@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import { GuideOption } from "../../components/GuideOption";
-import { GuideTarget } from "../../components/GuideTarget";
 import {
-  CheckCircle2,
-  CircleDollarSign,
   CloudOff,
   CreditCard,
   ExternalLink,
@@ -20,13 +17,11 @@ export function AccountPage({ app }: RouteProps) {
   const {
     bridge,
     snapshot,
-    selectedOffer,
-    setSelectedOffer,
     busy,
     run
   } = app;
 
-  const [buyingPlans, setBuyingPlans] = useState(false);
+  const [plansFailure, setPlansFailure] = useState(false);
   const [manualSync, setManualSync] = useState(false);
   const [syncFailure, setSyncFailure] = useState<string>();
   const commerce = snapshot?.commerce;
@@ -65,7 +60,6 @@ export function AccountPage({ app }: RouteProps) {
   return (
     <section className="page account-page">
       <header className="page-heading">
-        {buyingPlans && <button type="button" className="button button-secondary" onClick={() => setBuyingPlans(false)}>{t("Back to account", "Quay lại tài khoản")}</button>}
         <span className={`status-badge ${signedIn ? "status-success" : configured ? "status-neutral" : "status-warning"}`}>
           <span />
           {authenticating ? authenticationLabel : commerce?.status ?? t("Loading", "Đang tải")}
@@ -73,7 +67,7 @@ export function AccountPage({ app }: RouteProps) {
       </header>
 
       <div className="account-grid">
-        {!buyingPlans && <section className="panel identity-panel" aria-labelledby="identity-title">
+        <section className="panel identity-panel" aria-labelledby="identity-title">
           <header className="panel-heading">
             <div className="panel-icon panel-icon-blue"><UserRound size={19} /></div>
             <div>
@@ -152,14 +146,14 @@ export function AccountPage({ app }: RouteProps) {
               </div>
             </div>
           )}
-        </section>}
+        </section>
 
         <section className="panel plan-panel" aria-label={t("Plan management", "Quản lý gói")}>
           <header className="panel-heading panel-heading-with-action">
             <div className="panel-heading-copy">
               <div className="panel-icon panel-icon-orange"><CreditCard size={19} /></div>
               <div>
-                <div className="heading-with-help"><h3 id="plan-title">{buyingPlans ? t("Available plans", "Các gói có thể mua") : t("Current plan", "Gói đang dùng")}</h3><GuideOption label={t("Plans", "Các gói")} /></div>
+                <div className="heading-with-help"><h3 id="plan-title">{t("Current plan", "Gói đang dùng")}</h3><GuideOption label={t("Plans", "Các gói")} /></div>
               </div>
             </div>
             {signedIn && (
@@ -168,14 +162,14 @@ export function AccountPage({ app }: RouteProps) {
                 disabled={disabled || syncing}
                 onClick={() => void syncAccess()}
               >
-                <RefreshCw size={16} /> {syncing ? t("Syncing…", "Đang đồng bộ…") : t("Sync access", "Đồng bộ")}
+                <RefreshCw size={16} /> {syncing ? t("Syncing…", "Đang đồng bộ…") : t("Sync access", "Đồng bộ quyền truy cập")}
               </button><GuideOption label={t("Sync access", "Đồng bộ")} /></span>
             )}
           </header>
 
-          {!buyingPlans && <section className="current-plan" aria-label={t("Current plan", "Gói đang dùng")}>
+          <section className="current-plan" aria-label={t("Current plan", "Gói đang dùng")}>
             <dl className="detail-list">
-              <div><dt>{t("Plan", "Gói")}</dt><dd>{signedIn ? subscription?.current.displayName ?? (subscriptionError ? t("Could not load plan", "Không tải được gói") : t("Not synced yet", "Chưa đồng bộ")) : t("Free mode", "Chế độ miễn phí")}</dd></div>
+              <div className="current-plan-name"><dt>{t("Plan", "Gói")}</dt><dd>{signedIn ? subscription?.current.displayName ?? (subscriptionError ? t("Could not load plan", "Không tải được gói") : t("Not synced yet", "Chưa đồng bộ")) : t("Free mode", "Chế độ miễn phí")}</dd></div>
               {subscription && <div><dt>{t("Valid from", "Có hiệu lực từ")}</dt><dd>{date(subscription.current.startsAtUtc)}</dd></div>}
               {subscription && <div><dt>{t("Valid until", "Có hiệu lực đến")}</dt><dd>{date(subscription.current.endsAtUtc)}</dd></div>}
               {commerce?.lastSyncedAtUtc && <div><dt>{t("Last synced", "Đồng bộ lần cuối")}</dt><dd>{date(commerce.lastSyncedAtUtc)}</dd></div>}
@@ -186,65 +180,23 @@ export function AccountPage({ app }: RouteProps) {
             {commerce?.syncError && <p role="status">{t("Some payments could not be checked. LexVerse will retry automatically.", "Chưa kiểm tra được một số giao dịch. LexVerse sẽ tự thử lại.")}</p>}
             {subscription?.upcoming.map(period => <p key={period.id}>{t("Upcoming", "Kỳ sắp tới")}: {period.displayName} · {date(period.startsAtUtc)} → {date(period.endsAtUtc)}</p>)}
             {commerce?.pendingCheckout && <p role="status">{t("Payment pending until", "Đang chờ thanh toán đến")} {date(commerce.pendingCheckout.expiresAtUtc)}. {t("Your current plan stays active.", "Gói đang dùng vẫn được giữ nguyên.")}</p>}
-          </section>}
-          {!buyingPlans && configured && <div className="browse-plans-action">
-            <p>{t("Explore plans when you are ready to upgrade.", "Khám phá các gói khi bạn muốn nâng cấp.")}</p>
-            <button type="button" className="button button-primary" onClick={() => setBuyingPlans(true)}>{t("Browse plans", "Xem các gói")}</button>
-          </div>}
-          {buyingPlans && <div className="purchase-plans">
-          <p className="purchase-intro">{t("Choose a plan. Access updates only after payment is confirmed.", "Chọn một gói. Quyền sử dụng chỉ cập nhật sau khi xác nhận thanh toán.")}</p>
-          {commerce?.catalogError && <div className="inline-notice notice-info" role="alert">
-            <p>{t("Could not refresh plans. Please retry.", "Chưa tải được danh sách gói. Vui lòng thử lại.")}</p>
-            <button className="button button-secondary" disabled={disabled} onClick={() => void run(t("Refreshing plans", "Đang tải lại gói"), () => bridge.command("commerce.restore"))}>{t("Retry", "Thử lại")}</button>
-          </div>}
-          {!configured ? (
-            <div className="empty-state">
-              <CircleDollarSign size={27} />
-              <div><strong>{t("Free mode", "Chế độ miễn phí")}</strong><p>{t("Paid plans are unavailable in this configuration.", "Các gói trả phí chưa khả dụng trong cấu hình này.")}</p></div>
-            </div>
-          ) : commerce?.catalogError && !commerce.offers.length ? null
-            : commerce?.status === "LOADING" && !commerce.offers.length ? <p role="status">{t("Loading plans…", "Đang tải các gói…")}</p> : commerce?.offers.length ? (
-            <div className="offer-list" role="radiogroup" aria-label={t("Available plans", "Các gói khả dụng")}>
-              {commerce.offers.map((offer) => (
-                <div className="offer-with-help" key={offer.id}><label className={`offer-option ${selectedOffer === offer.id ? "offer-selected" : ""}`}>
-                  <input
-                    disabled={disabled}
-                    type="radio"
-                    name="plan"
-                    value={offer.id}
-                    checked={selectedOffer === offer.id}
-                    onChange={() => setSelectedOffer(offer.id)}
-                  />
-                  <span className="offer-radio" aria-hidden="true" />
-                  <strong>{offer.label}</strong>
-                  <CheckCircle2 style={{ visibility: selectedOffer === offer.id ? "visible" : "hidden" }} size={18} aria-hidden="true" />
-                </label><GuideTarget id={`plan-${offer.id}`} label={`${t("Plan help", "Hướng dẫn gói")}: ${offer.label}`}>{t("Select this plan, then continue to checkout. Access updates after payment confirmation.", "Chọn gói này rồi tiếp tục thanh toán. Quyền sử dụng cập nhật sau khi xác nhận thanh toán.")}</GuideTarget></div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <CircleDollarSign size={27} />
-              <div><strong>{t("No plans available", "Chưa có gói khả dụng")}</strong><p>{t("Please check again later.", "Vui lòng kiểm tra lại sau.")}</p></div>
-            </div>
-          )}
-
-          {configured && (
-            <div className="plan-footer">
-              {!signedIn && <p>{t("Sign in from your account before purchasing a plan.", "Đăng nhập từ trang tài khoản trước khi mua gói.")}</p>}
-              <div className="verified-payment">
-                <ShieldCheck size={17} />
-                <GuideTarget label={t("Payment details", "Thông tin thanh toán")}>{t("Access is updated after payment confirmation.", "Quyền sử dụng được cập nhật sau khi thanh toán được xác nhận.")}</GuideTarget>
-              </div>
-              <span className="action-with-help"><button
-                className="button button-primary"
-                disabled={disabled || !signedIn || !commerce?.offers.some(offer => offer.id === selectedOffer)}
-                onClick={() => void run(t("Opening checkout", "Đang mở thanh toán"), () => bridge.command("commerce.checkout", { offerId: selectedOffer }))}
-              >
-                <CreditCard size={17} /> {t("Continue to checkout", "Tiếp tục thanh toán")} <ExternalLink size={14} />
-              </button><GuideOption label={t("Continue to checkout", "Tiếp tục thanh toán")} /></span>
-            </div>
-          )}
-          </div>}
+          </section>
+          <div className="browse-plans-action">
+            <button type="button" className="button button-primary"
+              disabled={disabled || !commerce?.plansAvailable}
+              aria-describedby={commerce?.plansAvailable ? "plans-web-hint" : undefined}
+              onClick={() => {
+                setPlansFailure(false);
+                void run(t("Opening plans website", "Đang mở trang gói"), async () => {
+                  try { await bridge.command("commerce.openPlans"); }
+                  catch (reason) { setPlansFailure(true); throw reason; }
+                });
+              }}>
+              {t("View more plan", "Xem thêm gói")} <ExternalLink size={16} aria-hidden="true" />
+            </button>
+            {commerce?.plansAvailable && <p id="plans-web-hint">{t("After paying on the web, return here to sync your access.", "Sau khi thanh toán trên web, quay lại đây để đồng bộ.")}</p>}
+            {plansFailure && <p role="alert">{t("Could not open the browser. Please try again.", "Không mở được trình duyệt. Vui lòng thử lại.")}</p>}
+          </div>
         </section>
       </div>
 

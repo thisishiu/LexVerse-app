@@ -47,7 +47,7 @@ const entries: [string, string, string, string][] = [
   ["Sync access", "Đồng bộ", "Refresh your account access after a purchase or plan change.", "Làm mới quyền tài khoản sau khi mua hoặc đổi gói."],
   ["Refresh access", "Làm mới quyền truy cập", "Check the service for your latest payment and access status.", "Kiểm tra trạng thái thanh toán và quyền truy cập mới nhất."],
   ["Continue to checkout", "Tiếp tục thanh toán", "Select a plan and sign in first, then open secure checkout in your browser.", "Chọn gói và đăng nhập trước, sau đó mở trang thanh toán trong trình duyệt."],
-  ["Plans", "Các gói", "Choose an available plan. Access updates after payment confirmation.", "Chọn một gói khả dụng. Quyền sử dụng cập nhật sau khi xác nhận thanh toán."],
+  ["Plans", "Các gói", "View your current plan here. Browse and purchase plans on the website, then sync your access.", "Xem gói đang dùng tại đây. Xem và mua gói trên web, sau đó đồng bộ quyền truy cập."],
   ["LexVerse account", "Tài khoản LexVerse", "Sign in to manage your account and purchased access.", "Đăng nhập để quản lý tài khoản và quyền sử dụng đã mua."],
 ];
 function originalText(label: string) {

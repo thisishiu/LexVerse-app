@@ -41,23 +41,6 @@ it("shows sync progress, rejects failure inline, and displays confirmed Free aft
   expect(screen.getByRole("alert")).toHaveTextContent("Hãy kiểm tra kết nối rồi đồng bộ lại");
 });
 
-it("distinguishes a failed catalog from an empty catalog and permits retry while signed out", async () => {
-  const preview = new DesktopBridge();
-  const snapshot = await preview.command<DesktopSnapshot>("app.getSnapshot");
-  preview.dispose();
-  snapshot.settings.appLanguage = "en";
-  snapshot.commerce = { configured: true, status: "SIGNED OUT", offers: [], catalogError: true };
-  const command = vi.fn().mockResolvedValue(null);
-  const app = { snapshot, bridge: { command }, selectedOffer: "", setSelectedOffer: vi.fn(),
-    run: async (_label: string, action: () => Promise<unknown>) => action() } as unknown as RouteProps["app"];
-  render(<AccountPage app={app} navigate={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "Browse plans" }));
-  expect(screen.getByRole("alert")).toHaveTextContent("Could not refresh plans");
-  expect(screen.queryByText("No plans available")).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-  expect(command).toHaveBeenCalledWith("commerce.restore");
-});
-
 it("shows the granted plan separately from an unpaid selected offer and upcoming periods", async () => {
   const preview = new DesktopBridge();
   const snapshot = await preview.command<DesktopSnapshot>("app.getSnapshot");
@@ -73,10 +56,6 @@ it("shows the granted plan separately from an unpaid selected offer and upcoming
   expect(screen.queryByRole("radio")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Continue to checkout/ })).not.toBeInTheDocument();
   expect(screen.getByText(/Payment pending until/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Browse plans" }));
-  expect(screen.getByRole("radio")).toBeChecked();
-  expect(screen.queryByRole("region", { name: "Current plan" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Back to account" }));
   snapshot.commerce.subscription!.current.displayName = "Pro";
   snapshot.commerce.pendingCheckout = undefined;
   snapshot.commerce.status = "SIGNED IN";
@@ -107,4 +86,57 @@ it("keeps recovery controls available while waiting and hides duplicate sign-in 
   rerender(<AccountPage app={app} navigate={vi.fn()} />);
   expect(screen.getByRole("button", { name: "Sign in or create account" })).toBeEnabled();
   expect(screen.queryByRole("button", { name: "Copy link" })).not.toBeInTheDocument();
+});
+
+
+it.each([true, false])("opens web plans independently of account and catalog (%s)", async signedIn => {
+  const preview = new DesktopBridge();
+  const snapshot = await preview.command<DesktopSnapshot>("app.getSnapshot");
+  preview.dispose();
+  snapshot.settings.appLanguage = "en";
+  snapshot.commerce = { configured: signedIn, status: "SIGNED OUT", plansAvailable: true,
+    displayName: signedIn ? "Reader" : undefined, offers: [], catalogError: true };
+  const command = vi.fn().mockRejectedValueOnce(new Error("browser-open-failed")).mockResolvedValueOnce(null);
+  const globalError = vi.fn();
+  const app = { snapshot, bridge: { command }, run: async (_label: string, action: () => Promise<unknown>) => {
+    try { await action(); } catch (reason) { globalError(reason); }
+  } } as unknown as RouteProps["app"];
+  render(<AccountPage app={app} navigate={vi.fn()} />);
+  const button = screen.getByRole("button", { name: "View more plan" });
+  expect(button).toBeEnabled();
+  expect(button).toHaveAttribute("aria-describedby", "plans-web-hint");
+  button.focus();
+  expect(button).toHaveFocus();
+  fireEvent.click(button);
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Could not open the browser"));
+  expect(globalError).toHaveBeenCalledWith(new Error("browser-open-failed"));
+  fireEvent.click(button);
+  await waitFor(() => expect(command).toHaveBeenCalledTimes(2));
+  expect(command).toHaveBeenCalledWith("commerce.openPlans");
+  expect(command.mock.calls[0]).toHaveLength(1);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+  expect(screen.queryByText("Available plans")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Back to account" })).not.toBeInTheDocument();
+});
+
+it("disables missing URL and busy states with Vietnamese guidance", async () => {
+  const preview = new DesktopBridge();
+  const snapshot = await preview.command<DesktopSnapshot>("app.getSnapshot");
+  preview.dispose();
+  snapshot.settings.appLanguage = "vi";
+  snapshot.commerce.plansAvailable = false;
+  const command = vi.fn();
+  const app = { snapshot, bridge: { command }, run: vi.fn() } as unknown as RouteProps["app"];
+  const { rerender } = render(<AccountPage app={app} navigate={vi.fn()} />);
+  const button = screen.getByRole("button", { name: "Xem thêm gói" });
+  expect(button).toBeDisabled();
+  fireEvent.click(button);
+  expect(command).not.toHaveBeenCalled();
+  expect(screen.queryByText("Trang chọn gói chưa được cấu hình.")).not.toBeInTheDocument();
+  expect(button).not.toHaveAttribute("aria-describedby");
+  snapshot.commerce.plansAvailable = true;
+  rerender(<AccountPage app={{ ...app, busy: "Working" }} navigate={vi.fn()} />);
+  expect(button).toBeDisabled();
+  expect(screen.getByText("Sau khi thanh toán trên web, quay lại đây để đồng bộ.")).toBeInTheDocument();
 });

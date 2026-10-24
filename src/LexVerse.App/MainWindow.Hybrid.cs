@@ -357,6 +357,17 @@ public partial class MainWindow
                 await RunCommerceOperationAsync(_commerce.RestorePurchasesAsync, "Restoring purchases and refreshing access...");
                 return null;
 
+            case "commerce.openPlans":
+            {
+                var website = new LexVerse.Infrastructure.Configuration.PlansWebsite(
+                    Environment.GetEnvironmentVariable("LEXVERSE_PLANS_URL"));
+                if (!website.IsAvailable)
+                    throw new DesktopBridgePayloadException("plans-website-unavailable");
+                try { website.Open(); }
+                catch { throw new DesktopBridgePayloadException("browser-open-failed"); }
+                return null;
+            }
+
             case "commerce.checkout":
             {
                 var payload = DesktopBridgeProtocol.DeserializePayload<CheckoutPayload>(command.Payload);
@@ -606,6 +617,8 @@ public partial class MainWindow
                 catalogError = commerce.CatalogError,
                 syncError = commerce.SyncError,
                 subscriptionError = commerce.SubscriptionError,
+                plansAvailable = new LexVerse.Infrastructure.Configuration.PlansWebsite(
+                    Environment.GetEnvironmentVariable("LEXVERSE_PLANS_URL")).IsAvailable,
                 offers
             }
         };

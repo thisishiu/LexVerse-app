@@ -1821,3 +1821,10 @@ input:disabled {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Keep account plan details and the website action readable at narrow widths. */
+.current-plan-name dd { font-size: 22px; font-weight: 700; color: var(--text); }
+.browse-plans-action { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.browse-plans-action p { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.browse-plans-action .button { max-width: 100%; white-space: normal; text-align: left; }
+.browse-plans-action .button svg { flex-shrink: 0; }

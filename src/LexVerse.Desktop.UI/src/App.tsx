@@ -109,14 +109,6 @@ export function App() {
     {introActive && <StartupIntro ready={Boolean(app.snapshot)} onComplete={finishIntro} />}
     <GuideProvider route={route} allowed={app.snapshot?.privacy.allowRemoteTextProcessing} ready={Boolean(app.snapshot) && !introActive} error={app.error} shortcuts={app.snapshot ? { ...app.snapshot.settings.shortcuts } : undefined} vietnamese={isVietnamese} onActiveChange={notifyGuideProvider}><div className="app-shell" inert={introActive}>
       <aside className="sidebar">
-        <div className="brand">
-          <img className="brand-mark" src="/branding/logo.png" alt="" aria-hidden="true" />
-          <div className="brand-copy">
-            <strong>LexVerse</strong>
-
-          </div>
-        </div>
-
         <nav className="side-nav" aria-label="Application navigation">
           {routeIds.map((id) => {
             const Icon = routes[id].icon;
