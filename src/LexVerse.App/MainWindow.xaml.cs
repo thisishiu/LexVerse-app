@@ -49,7 +49,7 @@ public partial class MainWindow : Window
     private string _targetLanguage = "vi";
     private string _hotkeyStatus = "F6 starting";
     private string _status = "Starting workspace...";
-    private bool IsRealtimeRunning => _realtimeModule.Coordinator.State.Status is
+    private bool IsRealtimeRunning => (_demo?.State ?? _realtimeModule.Coordinator.State).Status is
         RealtimeCoordinatorStatus.Starting or RealtimeCoordinatorStatus.Running;
     private bool CanStartRegion => _regionAccessAllowed &&
         _privacyPreferences.Current.AllowRemoteTextProcessing && !IsRealtimeRunning && !_isSelectingRegion;
@@ -138,7 +138,11 @@ public partial class MainWindow : Window
     }
 
     private void PrivacyPreferences_Changed(object? sender, PrivacyPreferences preferences) =>
-        Dispatcher.BeginInvoke(() => PublishDesktopSnapshot());
+        Dispatcher.BeginInvoke(async () =>
+        {
+            if (_demo is not null && !preferences.AllowRemoteTextProcessing) await RunDemoOperationAsync(() => _demo.StopAsync());
+            PublishDesktopSnapshot();
+        });
 
     private void DesktopPreferences_Changed(object? sender, DesktopPreferences preferences) =>
         Dispatcher.BeginInvoke(() =>
@@ -331,6 +335,17 @@ public partial class MainWindow : Window
 
     private async Task TranslateQuickTextAsync(string text)
     {
+        if (_demo is not null)
+        {
+            await RunDemoOperationAsync(async () =>
+            {
+                if (!_privacyPreferences.Current.AllowRemoteTextProcessing) throw new InvalidOperationException("Text processing is disabled.");
+                _lastQuickTranslation = await _demo.QuickAsync(text, _sourceLanguage, _targetLanguage)
+                    ?? throw new InvalidOperationException("Đoạn văn này chưa có bản dịch trong ca quay đang mở.");
+                _status = "Translation complete.";
+            });
+            return;
+        }
         if (string.IsNullOrWhiteSpace(text))
         {
             _status = "Enter text in Quick text first.";
@@ -355,6 +370,7 @@ public partial class MainWindow : Window
         _isSelectingRegion = true;
         try
         {
+            if (_demo is not null) await _demo.StopAsync();
             await _realtimeModule.Coordinator.StopAsync();
             WindowState = WindowState.Minimized;
             await Task.Delay(160);
@@ -399,6 +415,12 @@ public partial class MainWindow : Window
 
     private async Task StopRealtimeAsync()
     {
+        if (_demo is not null)
+        {
+            await RunDemoOperationAsync(() => _demo.StopAsync());
+            _status = "Realtime translation stopped.";
+            return;
+        }
         try
         {
             await _realtimeModule.Coordinator.StopAsync();
@@ -412,6 +434,7 @@ public partial class MainWindow : Window
 
     private Task StartRealtimeAsync(RealtimeCaptureKind kind, LexVerse.Core.Geometry.ScreenRect bounds)
     {
+        if (_demo is not null) return StartDemoRealtimeAsync(kind, bounds);
         _status = kind == RealtimeCaptureKind.Region
             ? "Starting selected-region translation…"
             : "Starting full-screen translation…";
@@ -495,6 +518,7 @@ public partial class MainWindow : Window
 
     private async Task RunSelectedTextPopupAsync()
     {
+        if (_demo is not null) { await RunDemoPopupAsync(); return; }
         await RunTranslationAsync(
             token => _popupModule.UseCase.TranslateSelectedTextAsync(CreateRequest(), token, () =>
             {
@@ -681,6 +705,7 @@ public partial class MainWindow : Window
         _status = "Stopping background work…";
         try
         {
+            if (_demo is not null) await _demo.StopAsync();
             await _realtimeModule.Coordinator.StopAsync();
         }
         catch

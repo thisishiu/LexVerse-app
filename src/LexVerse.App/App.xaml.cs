@@ -35,7 +35,19 @@ public partial class App : System.Windows.Application
 
         try
         {
-            _compositionRoot = new AppCompositionRoot(_telemetry, _privacyPreferences);
+            if (e.Args.Contains("--sample-app", StringComparer.OrdinalIgnoreCase))
+            {
+                MainWindow = new Demo.SampleAppWindow(
+                    ReadArgument(e.Args, "--case") ?? "article",
+                    ReadArgument(e.Args, "--pipe") ?? throw new ArgumentException("Missing sample connection."),
+                    int.TryParse(ReadArgument(e.Args, "--parent"), out var parent) ? parent : null);
+                MainWindow.Show();
+                return;
+            }
+
+            var demoCase = e.Args.Contains("--demo", StringComparer.OrdinalIgnoreCase)
+                ? ReadArgument(e.Args, "--case") ?? "article" : null;
+            _compositionRoot = new AppCompositionRoot(_telemetry, _privacyPreferences, demoCase: demoCase);
             MainWindow = _compositionRoot.CreateMainWindow();
             MainWindow.Show();
             _telemetry.TryRecord(new OperationalEvent
@@ -82,6 +94,12 @@ public partial class App : System.Windows.Application
             _privacyPreferences.Dispose();
             base.OnExit(e);
         }
+    }
+
+    private static string? ReadArgument(string[] args, string name)
+    {
+        var index = Array.FindIndex(args, value => value.Equals(name, StringComparison.OrdinalIgnoreCase));
+        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

@@ -21,6 +21,7 @@ using LexVerse.Infrastructure.Privacy;
 using LexVerse.Infrastructure.Windows;
 using LexVerse.Infrastructure.Configuration;
 using LexVerse.Infrastructure.Desktop;
+using LexVerse.App.Demo;
 
 namespace LexVerse.App;
 
@@ -42,9 +43,17 @@ public sealed class AppCompositionRoot : IDisposable
     public AppCompositionRoot(
         IOperationalTelemetry? telemetry = null,
         IPrivacyPreferencesService? privacyPreferences = null,
-        IDesktopPreferencesService? desktopPreferences = null)
+        IDesktopPreferencesService? desktopPreferences = null,
+        string? demoCase = null)
     {
-        BackendEndpointPolicy.LoadEnvironment();
+        if (demoCase is null) BackendEndpointPolicy.LoadEnvironment();
+        else
+        {
+            Demo = new DemoSession(demoCase);
+            privacyPreferences = new DemoPrivacyPreferences();
+            desktopPreferences = new DemoDesktopPreferences(demoCase);
+            telemetry = NullOperationalTelemetry.Instance;
+        }
         telemetry ??= NullOperationalTelemetry.Instance;
         if (privacyPreferences is null)
         {
@@ -65,8 +74,10 @@ public sealed class AppCompositionRoot : IDisposable
         _backendHttpClient = new HttpClient();
         _popupHttpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(6) };
         var launcher = new WindowsExternalUriLauncher();
-        _accountProvider = CreateAccountProvider(_backendHttpClient, launcher);
-        var entitlementProvider = CreatePaidEntitlementProvider(
+        _accountProvider = Demo is null ? CreateAccountProvider(_backendHttpClient, launcher) : new UnavailableAccountSessionProvider();
+        IEntitlementProvider entitlementProvider;
+        if (Demo is not null) entitlementProvider = new DemoEntitlements();
+        else entitlementProvider = CreatePaidEntitlementProvider(
             _backendHttpClient,
             _accountProvider,
             out _entitlementCache);
@@ -74,7 +85,7 @@ public sealed class AppCompositionRoot : IDisposable
         _accessService = _featureAccessService;
         var featureGate = new FeatureGate(_accessService);
         var selectedTextReader = new WindowsSelectedTextReader();
-        ITextTranslator translator = CreateRemoteTranslator(["translation.popup"]);
+        ITextTranslator translator = Demo is null ? CreateRemoteTranslator(["translation.popup"]) : new DemoDisabledTranslator();
         MonitorService = new WindowsMonitorService();
 
         PopupModule = new PopupFeatureModule(new PopupTranslationUseCase(
@@ -82,14 +93,14 @@ public sealed class AppCompositionRoot : IDisposable
             selectedTextReader,
             translator,
             telemetry,
-            new RemotePopupDocumentTranslator(_popupHttpClient,
+            Demo is not null ? null : new RemotePopupDocumentTranslator(_popupHttpClient,
                 () => new Uri((GetAbsoluteUri("LEXVERSE_TRANSLATION_ENDPOINT")
                     ?? throw new InvalidOperationException("Configure LEXVERSE_TRANSLATION_ENDPOINT before translating.")).AbsoluteUri.TrimEnd('/') + "/popup"),
                 _accountProvider, _privacyPreferences)));
         _realtimeOutput = new WpfRealtimeOverlayOutput(
             System.Windows.Application.Current.Dispatcher,
             _desktopPreferences);
-        var realtimeFactory = new WindowsRealtimePipelineSessionFactory(
+        IRealtimePipelineSessionFactory realtimeFactory = Demo is not null ? new DemoDisabledPipeline() : new WindowsRealtimePipelineSessionFactory(
             translator,
             monitorService: MonitorService,
             translatorFactory: request => CreateRemoteTranslator(new[] {
@@ -107,13 +118,15 @@ public sealed class AppCompositionRoot : IDisposable
         Modules = new FeatureModuleRegistry([PopupModule, RealtimeModule]);
         Commerce = new CommerceCoordinator(
             _accountProvider,
-            CreateCatalogProvider(_backendHttpClient),
-            CreateCommerceBackend(_backendHttpClient, _accountProvider),
+            Demo is null ? CreateCatalogProvider(_backendHttpClient) : new UnavailableProductCatalogProvider(),
+            Demo is null ? CreateCommerceBackend(_backendHttpClient, _accountProvider) : new UnavailableCommerceBackend(),
             launcher,
             _accessService);
     }
 
     public PopupFeatureModule PopupModule { get; }
+
+    internal DemoSession? Demo { get; }
 
     public RealtimeFeatureModule RealtimeModule { get; }
 
@@ -126,7 +139,7 @@ public sealed class AppCompositionRoot : IDisposable
     public MainWindow CreateMainWindow()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        return new MainWindow(
+        var window = new MainWindow(
             PopupModule,
             RealtimeModule,
             Modules,
@@ -136,6 +149,8 @@ public sealed class AppCompositionRoot : IDisposable
             _privacyPreferences,
             _desktopPreferences,
             _realtimeOutput);
+        if (Demo is not null) window.AttachDemo(Demo);
+        return window;
     }
 
     public void Dispose()
@@ -146,6 +161,7 @@ public sealed class AppCompositionRoot : IDisposable
         }
 
         _disposed = true;
+        Demo?.Dispose();
         RealtimeModule.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _realtimeOutput.Dispose();
         Commerce.Dispose();

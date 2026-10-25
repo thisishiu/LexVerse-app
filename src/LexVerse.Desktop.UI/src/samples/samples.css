@@ -1,0 +1,192 @@
+@import "../assets/fonts.css";
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+body { color: #303334; background: #f6f5f1; font-family: "Be Vietnam Pro", "Yu Gothic", "Malgun Gothic", "Microsoft YaHei", sans-serif; }
+button, input { font: inherit; }
+button { cursor: pointer; color: inherit; }
+button:disabled { cursor: default; opacity: .35; }
+button:focus-visible, input:focus-visible { outline: 2px solid #5487b7; outline-offset: 3px; }
+button { border: 0; background: transparent; }
+button, header, aside { user-select: none; }
+main { overflow: auto; min-height: 0; }
+.source-block { position: relative; display: grid; line-height: 1.75; isolation: isolate; }
+.source-text { user-select: text; grid-area: 1 / 1; }
+.has-translation > .source-text { visibility: hidden; }
+.reading-translation {
+  position: relative; grid-area: 1 / 1; z-index: 1; display: flex; align-items: center;
+  padding: 8px 12px; border-radius: 9px; color: white;
+  background: rgb(36 39 43 / var(--box-opacity, .96));
+  font: 400 calc(18px * var(--font-scale, 1)) / 1.55 "Be Vietnam Pro", sans-serif;
+  box-shadow: 0 4px 15px #0002; overflow: auto; user-select: text;
+  animation: translation-in 220ms ease-out;
+}
+.reading-translation.light { background: rgb(255 255 255 / var(--box-opacity, .96)); color: #272a30; border: 1px solid #d9dce1; }
+.reading-popup { position: fixed; z-index: 100; width: min(470px, calc(100vw - 30px)); max-height: calc(100vh - 80px); overflow: auto; border: 1px solid #dddfe4; border-radius: 13px; background: #fff; color: #272a30; box-shadow: 0 15px 65px #17203333; font: 16px/1.65 "Be Vietnam Pro", sans-serif; animation: translation-in 220ms ease-out; }
+.reading-popup header { padding: 10px 18px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #7b818d; cursor: move; touch-action: none; }
+.reading-popup header button { font-size: 24px; padding: 0 4px; }
+.reading-popup > p { margin: 18px; font-size: 18px; }
+.reading-vocabulary { margin: 0 18px 18px; padding-top: 12px; border-top: 1px solid #eee; }
+.reading-vocabulary small { color: #8b909a; letter-spacing: 2px; font-size: 10px; }
+.reading-vocabulary p { margin: 8px 0; font-size: 14px; }
+.reading-vocabulary b { margin-right: 12px; }
+@keyframes translation-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Fieldnotes Reader */
+.reader-shell { height: 100%; display: grid; grid-template-columns: 235px 1fr; grid-template-rows: 70px 1fr; background: #fbfaf7; }
+.reader-header { grid-column: 1 / -1; display: flex; align-items: center; gap: 25px; border-bottom: 1px solid #e3e2db; padding: 0 28px; background: #fbfaf7; }
+.fieldnotes-logo { font: italic 42px Georgia, serif; display: flex; align-items: center; gap: 13px; color: #485a41; }
+.fieldnotes-logo span { font: 600 15px "Be Vietnam Pro", sans-serif; letter-spacing: 3px; }
+.header-divider { height: 22px; width: 1px; background: #d7d7cc; }
+.reader-subtitle { color: #8d8f82; font: italic 15px Georgia, serif; }
+.reader-save { margin-left: auto; border: 1px solid #d4d9c9; border-radius: 6px; padding: 9px 14px; color: #536449; font-size: 12px; }
+.reader-sidebar { border-right: 1px solid #e3e2db; padding: 35px 18px; background: #f2f2ea; display: flex; flex-direction: column; }
+.sidebar-label { font-size: 9px; letter-spacing: 1.5px; color: #959889; display: block; line-height: 1.7; }
+.reader-sidebar h2 { margin: 10px 0 22px; font: 30px Georgia, serif; }
+.reader-sidebar input { width: 100%; border: 1px solid #dbddd1; border-radius: 5px; background: #ffffff70; padding: 10px; font-size: 11px; margin-bottom: 35px; }
+.reader-sidebar > button { text-align: left; padding: 17px 12px; border-radius: 7px; margin-top: 12px; font-size: 13px; line-height: 1.5; }
+.reader-sidebar > button.active { background: #e0e5d6; color: #405139; }
+.reader-sidebar button > span { display: block; font-size: 10px; color: #9a9e8f; margin-bottom: 6px; }
+.reader-sidebar small { display: block; color: #8c9281; font-size: 10px; margin-top: 8px; }
+.library-note { margin-top: auto; padding: 35px 8px 10px; color: #9ca28e; font: italic 25px/1.2 Georgia, serif; }
+.article-scroll { padding: 22px 6% 55px; }
+.article-toolbar { display: flex; justify-content: space-between; align-items: center; color: #8b8e81; font-size: 9px; letter-spacing: 1.2px; padding-bottom: 27px; }
+.article-toolbar button { font-size: 13px; padding: 5px 9px; border: 1px solid #e0e2d7; margin-left: 5px; border-radius: 4px; }
+.article-scroll article { max-width: 790px; margin: auto; }
+.article-kicker { font-size: 10px; letter-spacing: 2px; color: #8b997c; }
+.article-title { font: 3em/1.17 Georgia, serif; letter-spacing: -1.5px; margin: 16px 0 25px; min-height: 1.3em; }
+.article-title .reading-translation { font-size: calc(29px * var(--font-scale, 1)); }
+.byline { display: flex; align-items: center; gap: 12px; font-size: 12px; margin-bottom: 25px; }
+.avatar { display: grid; place-items: center; border-radius: 50%; width: 35px; height: 35px; background: #e1e5d9; color: #65735c; font-size: 10px; }
+.byline small { display: block; margin-top: 4px; font-size: 10px; color: #9a9b93; }
+.article-art { position: relative; overflow: hidden; height: 215px; border-radius: 3px; background: #e1e5d6; display: flex; align-items: center; padding: 30px 45px; margin-bottom: 28px; }
+.article-art > span { font: italic 3.1em/1.05 Georgia, serif; color: #59694d; letter-spacing: -2px; z-index: 1; }
+.art-circle { position: absolute; width: 330px; height: 330px; border-radius: 50%; border: 40px solid #c9d1bc; right: -60px; top: -45px; }
+.article-lede { font: 1.4em/1.65 Georgia, serif; min-height: 135px; margin: 0 0 25px; }
+.article-paragraph { font: 1.2em/1.85 Georgia, serif; margin: 0 0 28px; min-height: 100px; }
+.article-scroll hr { border: 0; border-top: 1px solid #e0e2d7; margin: 40px 0; }
+.article-end { color: #949889; font: italic 18px/1.6 Georgia, serif; }
+.next-article { padding: 20px 0; color: #566a46; font-size: 13px; }
+
+/* Starfall */
+.game-shell { height: 100%; position: relative; display: grid; grid-template-columns: 250px 1fr; grid-template-rows: 80px 1fr 85px; color: #ede6d1; background: #172d39; }
+.game-world { position: absolute; inset: 0; overflow: hidden; background: linear-gradient(135deg, #12283a, #304a54 65%, #68796d); pointer-events: none; }
+.game-header { grid-column: 1 / -1; display: flex; align-items: center; gap: 45px; padding: 0 35px; z-index: 1; border-bottom: 1px solid #d8dcc32b; }
+.starfall-logo { font: 23px Georgia, serif; letter-spacing: 5px; }
+.game-header > span:nth-child(2) { font-size: 13px; color: #c2c9b4; }
+.player-avatar { margin-left: auto; border: 1px solid #b8c5a3; border-radius: 50%; width: 38px; height: 38px; display: grid; place-items: center; font: 22px Georgia, serif; }
+.game-moon { position: absolute; width: 120px; height: 120px; border-radius: 50%; background: #e0ddb9; right: 14%; top: 17%; box-shadow: 0 0 100px #e6e0b82b; }
+.ridge { position: absolute; bottom: 0; right: -5%; width: 110%; height: 65%; background: #142e3c99; clip-path: polygon(0 100%, 0 60%, 18% 22%, 33% 57%, 61% 0, 80% 36%, 100% 15%, 100% 100%); }
+.ridge-front { height: 38%; background: #102630; transform: scaleX(-1); }
+.sea { position: absolute; height: 10%; background: #142a32bb; bottom: 0; width: 100%; }
+.lighthouse { position: absolute; bottom: 20%; right: 7%; width: 42px; height: 160px; background: #a9b5a6; clip-path: polygon(30% 0,70% 0,100% 100%,0 100%); }
+.lighthouse i { display: block; height: 25px; margin-top: 25px; background: #e9dc99; box-shadow: 0 0 35px #ead699; }
+.quest-list { z-index: 1; padding: 40px 25px; background: #10222d75; }
+.quest-list > span { font-size: 9px; letter-spacing: 2px; color: #9caeaa; }
+.quest-list h2 { font-size: 18px; font-weight: 400; margin: 13px 0 30px; }
+.quest-list button { display: block; width: 100%; text-align: left; margin-bottom: 15px; padding: 20px 15px; border-left: 2px solid transparent; font-size: 15px; }
+.quest-list button.active { background: #c5d2b412; border-left-color: #c6cba1; }
+.quest-list small { display: block; color: #92a49d; font-size: 9px; letter-spacing: 1px; margin-bottom: 8px; }
+.quest-scroll { z-index: 1; padding: 35px 55px 30px 40px; }
+.quest-card { max-width: 750px; padding: 30px 35px; border: 1px solid #b3c4b437; background: #152c37d9; box-shadow: 0 12px 70px #0002; }
+.quest-number { font-size: 10px; letter-spacing: 2px; color: #c0c5a4; }
+.quest-title { font-size: 31px; margin: 18px 0; min-height: 70px; }
+.quest-title .reading-translation { font-size: calc(25px * var(--font-scale, 1)); }
+.quest-rule { height: 1px; background: linear-gradient(90deg, #acba9855, transparent); margin-bottom: 25px; }
+.quest-label { color: #9eafa0; font-size: 11px; letter-spacing: 2px; }
+.quest-goal { font-size: 20px; min-height: 92px; padding-top: 8px; }
+.quest-detail { color: #b0c1b9; font-size: 16px; min-height: 80px; margin: 8px 0 18px; }
+.quest-rewards { padding: 18px 0; border-top: 1px solid #b3c4b429; }
+.quest-rewards .source-block { min-height: 65px; font-size: 16px; margin-top: 8px; }
+.quest-track { padding: 12px 20px; border: 1px solid #b9c3a67a; border-radius: 3px; background: #bfc7a617; font-size: 13px; }
+.quest-next { margin-left: 15px; font-size: 12px; color: #aebca4; padding: 12px 0; }
+.player-hud { grid-column: 1 / -1; z-index: 2; background: #10232cbd; display: flex; align-items: center; gap: 25px; padding: 15px 35px; border-top: 1px solid #b3c4b429; }
+.player-hud > span:first-child { font: 18px Georgia, serif; letter-spacing: 3px; }
+.player-hud small { display: block; font: 9px sans-serif; color: #a2b19b; margin-top: 7px; letter-spacing: 1px; }
+.health, .mana { width: 180px; border-bottom: 5px solid #a3b98a; padding-bottom: 9px; color: #c8d2bd; font-size: 10px; }
+.health b, .mana b { float: right; font-weight: 400; }
+.mana { border-color: #88b0c0; }
+.world-clock { margin-left: auto; font-size: 9px; color: #92a8a1; letter-spacing: 1px; }
+
+/* Postbox */
+.mail-shell { display: grid; grid-template-columns: 175px 265px 1fr; grid-template-rows: 65px 1fr; height: 100%; background: #fff; }
+.mail-header { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 0 25px; border-bottom: 1px solid #e4e8ef; }
+.postbox-logo { font-size: 25px; color: #4366a0; display: flex; gap: 10px; align-items: center; }
+.postbox-logo b { font-size: 20px; letter-spacing: -.7px; color: #314361; }
+.mail-account { color: #808b9a; font-size: 11px; display: flex; align-items: center; gap: 15px; }
+.mail-account i { background: #e5edf8; color: #5778a8; font-size: 10px; border-radius: 50%; padding: 10px; font-style: normal; }
+.mail-folders { background: #f5f7fb; border-right: 1px solid #e4e8ef; padding: 25px 15px; position: relative; }
+.compose { width: 100%; border: 1px solid #cdd9ec; color: #4a6c9f; background: #e9f0fb; border-radius: 8px; padding: 12px 8px; font-size: 12px; }
+.mail-folders h3 { font-size: 10px; color: #a2abba; font-weight: 400; margin: 35px 12px 15px; }
+.mail-folders > div { padding: 12px; font-size: 12px; color: #78869b; }
+.mail-folders .folder-current { background: #e6edf9; color: #44628f; border-radius: 6px; }
+.folder-current b { float: right; font-size: 10px; }
+.mail-storage { position: absolute; bottom: 25px; left: 25px; right: 25px; color: #a4aebc; font-size: 9px; }
+.mail-storage div { height: 3px; margin-top: 10px; background: linear-gradient(90deg, #8faed7 25%, #e0e6ee 25%); }
+.mail-list { border-right: 1px solid #e4e8ef; background: #fcfdff; }
+.mail-list h2 { font-size: 14px; font-weight: 500; margin: 0; padding: 26px 20px; }
+.mail-list h2 small { margin-left: 8px; color: #92a5c5; font-size: 11px; }
+.mail-list > button { position: relative; width: 100%; padding: 22px 15px; display: flex; gap: 10px; text-align: left; border-top: 1px solid #edf0f5; border-bottom: 1px solid #edf0f5; }
+.mail-list > button.active { background: #edf3fc; box-shadow: inset 3px 0 #7697ca; }
+.sender-avatar { flex-shrink: 0; width: 33px; height: 33px; display: grid; place-items: center; border-radius: 50%; background: #dee8f6; color: #7291bc; font-size: 13px; }
+.mail-list button strong { font-size: 12px; font-weight: 600; display: block; margin-bottom: 9px; }
+.mail-list button div > span { font-size: 12px; display: block; }
+.mail-list button small { display: block; font-size: 10px; color: #98a4b6; margin-top: 8px; }
+.mail-list time { position: absolute; top: 23px; right: 15px; font-size: 9px; color: #a1aec2; }
+.letter-scroll { padding: 0 35px 40px; }
+.letter-toolbar { display: flex; justify-content: space-between; align-items: center; height: 62px; border-bottom: 1px solid #edf0f5; color: #a9b2bf; font-size: 20px; }
+.letter-toolbar button { font-size: 22px; }
+.letter-body { padding-top: 30px; }
+.letter-title { font-size: 25px; min-height: 65px; font-weight: 500; }
+.letter-sender { display: flex; align-items: center; gap: 12px; font-size: 12px; padding: 22px 0 30px; }
+.letter-sender small { display: block; margin-top: 5px; font-size: 10px; color: #a8afba; }
+.letter-sender time { margin-left: auto; color: #a2aab6; font-size: 10px; }
+.letter-greeting, .letter-signature { font-size: 15px; color: #717d8e; line-height: 1.9; margin: 15px 0 30px; }
+.letter-paragraph { font-size: 21px; line-height: 2; min-height: 115px; margin: 10px 0 25px; }
+.letter-signature { margin-top: 45px; color: #9ba4b1; }
+
+/* After Rain Reader */
+.comic-shell { display: grid; grid-template-rows: 68px 1fr 64px; height: 100%; background: #26232a; color: #e9e2df; }
+.comic-header { display: flex; align-items: center; padding: 0 30px; border-bottom: 1px solid #ffffff13; gap: 55px; }
+.afterrain-logo { color: #cfaea6; font-size: 25px; display: flex; gap: 10px; align-items: center; }
+.afterrain-logo b { font: 21px Georgia, serif; color: #e2d1cb; }
+.comic-series { font-size: 14px; color: #b9a8a7; }
+.comic-series small { font-size: 10px; margin-left: 18px; color: #746b76; }
+.comic-header button { margin-left: auto; border: 1px solid #ffffff24; border-radius: 5px; padding: 8px 14px; font-size: 12px; color: #c9b7b7; }
+.comic-scroll { padding: 28px 45px; }
+.comic-page { max-width: 1200px; min-height: 700px; margin: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 20px; background: #ece6da; }
+.comic-panel { position: relative; overflow: hidden; min-height: 650px; background: linear-gradient(#8ca4b6, #d7b6b1 65%, #f0cdac); border: 3px solid #31353b; }
+.panel-two { background: linear-gradient(#758f9f, #c0a8b0 70%, #e7c0b0); }
+.comic-panel.page-1 { background: linear-gradient(#bbc9c8, #b5c6af 65%, #ddd4b2); }
+.comic-star { position: absolute; top: 25%; right: 12%; color: #fff4c7; font-size: 60px; }
+.star-two { top: 10%; right: 25%; }
+.comic-hill { position: absolute; width: 180%; height: 240px; left: -40%; bottom: -130px; background: #3f5758; border-radius: 50%; }
+.comic-person { position: absolute; width: 100px; height: 190px; background: #303d4c; border-radius: 45% 45% 0 0; bottom: 30px; left: 50%; transform: rotate(-6deg); }
+.comic-person:before { content: ""; width: 72px; height: 82px; background: inherit; border-radius: 50%; position: absolute; left: 14px; top: -64px; }
+.person-two { left: 15%; background: #5f535f; transform: rotate(7deg); }
+.person-three { left: 65%; width: 70px; height: 160px; bottom: 15px; }
+.person-three:before { width: 60px; height: 68px; left: 5px; top: -53px; }
+.speech-bubble { position: absolute; z-index: 3; left: 7%; top: 7%; width: 85%; min-height: 140px; border: 2px solid #343a42; border-radius: 50%; background: #fffdf4; padding: 24px 32px; display: grid; align-items: center; justify-content: center; text-align: center; color: #363b43; font-size: 24px; line-height: 1.6; }
+.bubble-two { top: 37%; }
+.speech-bubble .reading-translation { position: absolute; inset: 0; border-radius: 50%; background: #fffdf4; color: #303b46; box-shadow: none; justify-content: center; padding: 20px 30px; font-size: calc(22px * var(--font-scale, 1)); }
+.panel-caption { position: absolute; left: 18px; bottom: 16px; color: #e3e3d5; font-size: 11px; letter-spacing: 2px; z-index: 4; }
+.comic-navigation { display: flex; justify-content: center; align-items: center; gap: 65px; border-top: 1px solid #ffffff13; font-size: 12px; }
+.comic-navigation button { padding: 10px 20px; color: #c9b7b7; }
+.comic-navigation > span { font-size: 15px; letter-spacing: 2px; color: #e3cbc2; }
+.comic-navigation i { color: #736a77; font-size: 11px; font-style: normal; }
+
+@media (max-width: 1050px) {
+  .reader-shell { grid-template-columns: 200px 1fr; }
+  .reader-subtitle, .header-divider { display: none; }
+  .article-scroll { padding: 22px 5% 45px; }
+  .mail-shell { grid-template-columns: 145px 220px 1fr; }
+  .letter-scroll { padding: 0 25px 30px; }
+  .letter-title { font-size: 23px; }
+  .letter-paragraph { font-size: 18px; }
+  .quest-scroll { padding: 25px; }
+  .quest-card { padding: 25px; }
+  .quest-next { margin: 15px 0 0; display: block; }
+  .world-clock { display: none; }
+  .comic-scroll { padding: 20px; }
+  .speech-bubble { font-size: 21px; padding: 20px; }
+}

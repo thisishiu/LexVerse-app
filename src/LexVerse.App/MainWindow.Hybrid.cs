@@ -66,7 +66,7 @@ public partial class MainWindow
             var userDataFolder = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "LexVerse",
-                "WebView2");
+                _demo is null ? "WebView2" : "RecordingWebView2");
             Directory.CreateDirectory(userDataFolder);
             // Let the startup intro play its audio without requiring a click.
             var environmentOptions = new CoreWebView2EnvironmentOptions
@@ -122,6 +122,15 @@ public partial class MainWindow
 
     private void ConfigureWebViewSecurity(CoreWebView2 core)
     {
+        if (_demo is not null)
+        {
+            core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+            core.WebResourceRequested += (_, args) =>
+            {
+                if (!IsTrustedDesktopUiUri(args.Request.Uri))
+                    args.Response = core.Environment.CreateWebResourceResponse(null, 403, "Offline", "");
+            };
+        }
         core.Settings.AreDevToolsEnabled = false;
         core.Settings.AreDefaultContextMenusEnabled = false;
         core.Settings.AreBrowserAcceleratorKeysEnabled = false;
@@ -300,6 +309,12 @@ public partial class MainWindow
                 catch (InvalidOperationException) { throw new DesktopBridgePayloadException("window-unavailable"); }
                 var bounds = new LexVerse.Infrastructure.Windows.Win32WindowTracker().GetSnapshot(target.Hwnd).WindowRect;
                 _realtimeStartErrorCode = null;
+                if (_demo is not null)
+                {
+                    _selectedWindowName = target.DisplayName;
+                    await StartDemoRealtimeAsync(LexVerse.Application.Realtime.RealtimeCaptureKind.Window, bounds, target);
+                    return null;
+                }
                 await _realtimeModule.Coordinator.StartAsync(new LexVerse.Application.Realtime.RealtimeTranslationRequest(
                     LexVerse.Application.Realtime.RealtimeCaptureKind.Window, bounds, GetOcrLanguageTag(), CreateRealtimeOptions(), target));
                 _selectedWindowName = target.DisplayName;
@@ -315,6 +330,12 @@ public partial class MainWindow
                 return null;
 
             case "realtime.resetOverlay":
+                if (_demo is not null)
+                {
+                    await RunDemoOperationAsync(() => _demo.StopAsync(clear: true));
+                    _status = "Realtime overlay cleared.";
+                    return null;
+                }
                 await _realtimeOutput.ClearAsync();
                 _status = "Realtime overlay cleared.";
                 return null;
@@ -544,7 +565,7 @@ public partial class MainWindow
                 label = $"{catalog!.FindPlan(offer.PlanId)!.DisplayName} · {offer.Price.Amount:N0} {offer.Price.CurrencyCode} · " +
                     (offer.BillingPeriod is null ? "one-time" : $"every {offer.BillingPeriod.Count} {offer.BillingPeriod.Unit.ToString().ToLowerInvariant()}")
             }).ToArray();
-        var realtime = _realtimeModule.Coordinator.State;
+        var realtime = _demo?.State ?? _realtimeModule.Coordinator.State;
         var preferences = _desktopPreferences.Current;
         return new
         {
