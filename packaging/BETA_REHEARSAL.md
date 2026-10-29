@@ -4,7 +4,7 @@ This runbook is a release gate, not an informal smoke test. Record the candidate
 
 ## Preconditions
 
-- Candidate was produced by `.github/workflows/release-candidate.yml` from a commit reachable from `main`.
+- Candidate was produced by `.github/workflows/release-candidate.yml` on `release/msix`, from a commit reachable from that remote branch.
 - `test-signed-release-candidate.ps1` passed and the GitHub/Sigstore attestation verifies for the repository.
 - The `lexverse-beta` environment approval was performed by someone other than the workflow initiator.
 - Versioned MSIX and checksum are staged on HTTPS with correct MIME types, but the live Beta `.appinstaller` pointer has not changed yet.
