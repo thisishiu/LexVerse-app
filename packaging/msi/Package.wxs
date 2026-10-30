@@ -3,7 +3,12 @@
            UpgradeCode="833035A8-3B1B-44D6-BB54-EC1C74F01D77" Scope="perMachine" InstallerVersion="500">
     <MajorUpgrade DowngradeErrorMessage="A newer version of LexVerse is already installed." />
     <MediaTemplate EmbedCab="yes" />
-    <Launch Condition="Installed OR (VersionNT64 AND WindowsBuild &gt;= 19041)"
+    <Property Id="WINDOWSBUILD">
+      <RegistrySearch Id="WindowsBuildSearch" Root="HKLM"
+                      Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                      Name="CurrentBuildNumber" Type="raw" Bitness="always64" />
+    </Property>
+    <Launch Condition="Installed OR (VersionNT64 AND WINDOWSBUILD &gt;= 19041)"
             Message="LexVerse requires Windows 10 version 2004 (build 19041) or later, x64." />
     <Icon Id="AppIcon" SourceFile="$(var.PublishDir)\LexVerse.App.exe" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
