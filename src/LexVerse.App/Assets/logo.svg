@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="150" height="150" viewBox="0 0 150 150" role="img" aria-label="LexVerse LV logo">
+  <defs>
+    <path id="lv" d="M41 29.5 H52.2 Q53.2 29.5 53.2 30.5 V79.4 Q53.2 82.2 55.8 82.2 H79.1 Q80.3 82.2 81.1 83.6 L88.2 96.1 L104.9 70.7 Q106.2 68.6 108.1 68.6 H125.2 L88.4 126.2 Q87.1 128.2 86 126.2 L68.7 98.1 H43 Q35 98.1 35 90.2 V35.5 Q35 29.5 41 29.5 Z"/>
+    <clipPath id="shape"><use href="#lv"/></clipPath>
+    <linearGradient id="base" x1="52" y1="35" x2="92" y2="125" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#222325"/><stop offset=".55" stop-color="#1c1d1f"/><stop offset="1" stop-color="#111214"/>
+    </linearGradient>
+    <linearGradient id="leftGloss" x1="35" y1="65" x2="77" y2="65" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#898b8e" stop-opacity=".84"/><stop offset=".08" stop-color="#6d6f73" stop-opacity=".83"/><stop offset=".20" stop-color="#484a4d" stop-opacity=".79"/><stop offset=".35" stop-color="#303235" stop-opacity=".70"/><stop offset=".50" stop-color="#1a1b1d" stop-opacity=".46"/><stop offset=".75" stop-color="#191a1c" stop-opacity=".12"/><stop offset="1" stop-color="#191a1c" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="topShine" cx="37" cy="29" r="35" gradientTransform="matrix(.85 0 0 1 6 0)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#c7c9cc" stop-opacity=".65"/><stop offset=".38" stop-color="#8c9196" stop-opacity=".24"/><stop offset="1" stop-color="#8c9196" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="horizontalShine" cx="75" cy="82" r="24" gradientTransform="matrix(1 0 0 .65 0 29.3)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#898e94" stop-opacity=".55"/><stop offset=".5" stop-color="#777a80" stop-opacity=".18"/><stop offset="1" stop-color="#777a80" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rightShine" cx="104" cy="68" r="29" gradientTransform="matrix(.8 0 0 .9 21 7)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#95999d" stop-opacity=".88"/><stop offset=".4" stop-color="#6e7276" stop-opacity=".43"/><stop offset="1" stop-color="#3a3d40" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="150" height="150" rx="28" fill="#fff"/>
+  <use href="#lv" fill="url(#base)"/>
+  <g clip-path="url(#shape)">
+    <rect x="34" y="29" width="49" height="70" fill="url(#leftGloss)"/>
+    <rect x="34" y="29" width="34" height="40" fill="url(#topShine)"/>
+    <rect x="49" y="80" width="53" height="24" fill="url(#horizontalShine)"/>
+    <rect x="85" y="67" width="43" height="40" fill="url(#rightShine)"/>
+  </g>
+</svg>

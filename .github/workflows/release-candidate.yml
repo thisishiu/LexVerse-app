@@ -57,11 +57,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Require source commit on main
+      - name: Require release/msix source branch
         shell: pwsh
         run: |
-          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
-          if ($LASTEXITCODE -ne 0) { throw 'Signed candidates must be built from a commit reachable from main.' }
+          if ($env:GITHUB_REF -ne 'refs/heads/release/msix') {
+            throw 'Signed candidates must be built from the release/msix branch.'
+          }
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/release/msix
+          if ($LASTEXITCODE -ne 0) { throw 'Signed candidates must be built from a commit reachable from release/msix.' }
 
       - name: Install .NET SDK
         uses: actions/setup-dotnet@v5

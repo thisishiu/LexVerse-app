@@ -1,5 +1,43 @@
 # LexVerse Windows distribution
 
+## MSI for GitHub Releases
+
+From `release/msi`, run on Windows with .NET 10 SDK and Node.js/npm:
+
+```powershell
+.\scripts\package-msi.ps1 -Version 1.0.0
+```
+
+The script installs WiX 6.0.2 locally if needed and produces
+`artifacts/msi/1.0.0/win-x64/LexVerse-1.0.0-x64.msi` and `.msi.sha256`.
+Upload these two files as GitHub Release assets, not the publish directory.
+The installer targets Windows 10 build 19041+ x64, installs per-machine
+(administrator permission required), adds a Start menu shortcut, and supports
+major upgrades while blocking downgrades. Use increasing three-part MSI versions.
+The .NET runtime is included; Microsoft Edge WebView2 Evergreen Runtime must
+already be installed. MSIX installations remain separate from MSI installations.
+MSI updates are manual, not managed by App Installer.
+
+The output is **unsigned**; Windows may show an unknown-publisher warning.
+Sign with a trusted code-signing certificate before public distribution and
+regenerate the SHA-256 checksum after signing. Test installation, launch,
+upgrade, repair and uninstall on a clean Windows VM before publishing.
+Only `packaging/client.env` is included; root developer dotenv files are not used.
+
+## Microsoft Store submission
+
+For Microsoft Store releases, use the identity registered in Partner Center and saved in `packaging/store-identity.json`. Do not substitute the direct-distribution identity or a local signing certificate.
+
+```powershell
+.\scripts\package-msix.ps1 -Version 1.0.0.0 -Store
+```
+
+This produces an unsigned, self-contained x64 MSIX and SHA-256 checksum under `artifacts/store/stable/1.0.0.0/win-x64/`. Upload the MSIX in the app's Partner Center submission. Microsoft signs and distributes the accepted package and manages updates; no hosting URL, PFX, or `.appinstaller` is needed. The fourth version component must be zero. Use Store package flights for testing rather than the separate direct-distribution Beta identity.
+
+The signed release candidate workflow below is for direct distribution, not Store submission. Before submitting, run the Release build and tests, check the package with the Windows App Certification Kit, and complete the Store listing, privacy policy, age ratings, and certification notes (including the reason for `runFullTrust`). An unsigned submission artifact is not a locally installable test package; use a separately signed test copy or Store flights to test installation.
+
+## Direct distribution
+
 LexVerse uses one self-contained MSIX package per release channel. Windows App Installer owns installation, integrity verification, background/on-launch updates, and repair. Stable and Beta use separate package identities, so a tester can keep both installed without Beta replacing Stable.
 
 ## Build a package
@@ -57,9 +95,11 @@ Unsigned packages are deliberately opt-in and are not installable as production 
 
 ## Build a protected signed candidate in GitHub Actions
 
-The manual `LexVerse signed release candidate` workflow accepts package/channel versions, channel, HTTPS release root, exact publisher subject, and publisher display name. It will only build a commit reachable from `main`, then repeats Release build, tests, startup/memory budgets, and dependency audit before signing.
+The release branch is `release/msix`, created from `dev`. Prepare and review packaging changes there; merging into `main` is not required to release. Push the branch before running the workflow and select `release/msix` as its source branch.
 
-Create protected GitHub environments named `lexverse-beta` and `lexverse-stable`. Configure required reviewers, prevent self-review, restrict deployment branches to `main`, and store these environment secrets:
+The manual `LexVerse signed release candidate` workflow accepts package/channel versions, channel, HTTPS release root, exact publisher subject, and publisher display name. It only runs from the `release/msix` branch and requires the source commit to be reachable from that remote branch, then repeats Release build, tests, startup/memory budgets, and dependency audit before signing.
+
+Create protected GitHub environments named `lexverse-beta` and `lexverse-stable`. Configure required reviewers, prevent self-review, restrict deployment branches to `release/msix`, and store these environment secrets. These environment settings must be configured in GitHub; changing this repository does not update them automatically:
 
 - `SIGNING_PFX_BASE64`: base64 of the code-signing PFX;
 - `SIGNING_PFX_PASSWORD`: PFX password.

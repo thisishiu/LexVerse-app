@@ -16,6 +16,16 @@ export function guideProps(id: string, title: string, text: string, demoKey?: st
 const markdown = new MarkdownIt({ html: false, linkify: false });
 markdown.disable(["image", "link", "autolink"]);
 type Target = { id: string; title: string; text: string; element: HTMLElement; left: number; top: number; width: number; height: number };
+function visibleRect(element: HTMLElement) {
+  const rect = element.getBoundingClientRect();
+  let left = Math.max(0, rect.left), top = Math.max(0, rect.top), right = Math.min(innerWidth, rect.right), bottom = Math.min(innerHeight, rect.bottom);
+  for (let p = element.parentElement; p; p = p.parentElement) {
+    const style = getComputedStyle(p), clip = p.getBoundingClientRect();
+    if (/(auto|scroll|hidden|clip)/.test(style.overflowX)) { left = Math.max(left, clip.left); right = Math.min(right, clip.right); }
+    if (/(auto|scroll|hidden|clip)/.test(style.overflowY)) { top = Math.max(top, clip.top); bottom = Math.min(bottom, clip.bottom); }
+  }
+  return right > left && bottom > top ? { left, top, width: right-left, height: bottom-top } : undefined;
+}
 type Props = { children: ReactNode; vietnamese?: boolean; onActiveChange?: (active: boolean) => void;
   route?: AppRoute; allowed?: boolean; ready?: boolean; error?: string; shortcuts?: Record<string, string> };
 const demos = [
@@ -33,6 +43,7 @@ export function GuideProvider({ children, vietnamese = false, onActiveChange, ro
   const root = useRef<HTMLDivElement>(null), toggle = useRef<HTMLButtonElement>(null), panel = useRef<HTMLElement>(null);
   const [mode, setMode] = useState<Mode>("idle"), [step, setStep] = useState(0);
   const [targets, setTargets] = useState<Target[]>([]), [selected, setSelected] = useState<string>();
+  const [tabsRect, setTabsRect] = useState<ReturnType<typeof visibleRect>>();
   const [suspended, setSuspended] = useState(false), [position, setPosition] = useState({ left: 16, top: 16 });
   const active = mode !== "idle";
   const t = (en: string, vi: string) => vietnamese ? vi : en;
@@ -70,17 +81,13 @@ export function GuideProvider({ children, vietnamese = false, onActiveChange, ro
           ? declaration.closest<HTMLElement>(".language-toolbar") ?? declaration
           : mode === "tour" && declaration.classList.contains("heading-with-help") ? declaration.closest<HTMLElement>(".panel") ?? declaration : declaration;
         if (element.closest("[data-help-scope]") !== scope || element.hidden || getComputedStyle(element).visibility === "hidden") return;
-        const rect = element.getBoundingClientRect();
-        let left = Math.max(0, rect.left), top = Math.max(0, rect.top), right = Math.min(innerWidth, rect.right), bottom = Math.min(innerHeight, rect.bottom);
-        for (let p = element.parentElement; p; p = p.parentElement) {
-          const style = getComputedStyle(p), clip = p.getBoundingClientRect();
-          if (/(auto|scroll|hidden|clip)/.test(style.overflowX)) { left = Math.max(left, clip.left); right = Math.min(right, clip.right); }
-          if (/(auto|scroll|hidden|clip)/.test(style.overflowY)) { top = Math.max(top, clip.top); bottom = Math.min(bottom, clip.bottom); }
-        }
-        if (right <= left || bottom <= top) return;
-        next.push({ element, id: declaration.dataset.helpId!, title: declaration.dataset.helpTitle ?? "", text: declaration.dataset.helpText ?? "", left, top, width: right-left, height: bottom-top });
+        const rect = visibleRect(element);
+        if (!rect) return;
+        next.push({ element, id: declaration.dataset.helpId!, title: declaration.dataset.helpTitle ?? "", text: declaration.dataset.helpText ?? "", ...rect });
       });
       setTargets(next);
+      const tabs = scope.querySelector<HTMLElement>(".settings-tabs");
+      setTabsRect(mode === "explore" && tabs ? visibleRect(tabs) : undefined);
     };
     measure();
     const resize = new ResizeObserver(measure); resize.observe(scope);
@@ -145,7 +152,6 @@ export function GuideProvider({ children, vietnamese = false, onActiveChange, ro
   const related = step === 8 ? ["Full screen", "About OCR modes"] : step === 9 ? ["Stop live translation", "Clear overlay"] : [];
   const visibleTargets = mode === "tour" ? targets.filter(item => item.id === wanted || related.some(label => item.id === helpId(label))) : targets.filter(item => !item.id.startsWith("nav-"));
   const maskId = route ? "app-guide-mask" : "dialog-guide-mask";
-  const tabsRect = mode === "explore" ? root.current?.querySelector(".settings-tabs")?.getBoundingClientRect() : undefined;
   return <Context.Provider value={{ active, exit, notifyHost }}><div ref={root} className="guide-scope" data-help-scope>
     {children}
     {!suspended && <div className="guide-tools" data-guide-ui>

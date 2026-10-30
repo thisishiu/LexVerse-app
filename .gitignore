@@ -68,6 +68,24 @@ artifacts/ocr-debug/
 *.pubxml
 *.pubxml.user
 
+# Generated Windows distribution packages
+*.msi
+*.msi.sha256
+*.wixpdb
+*.wixobj
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
+*.appxupload
+*.msixupload
+AppPackages/
+
+# Private signing material (never commit)
+*.pfx
+*.p12
+*.key
+
 # Local configuration and secrets
 .env
 .env.*

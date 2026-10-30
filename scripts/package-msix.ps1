@@ -12,7 +12,6 @@ param(
     [ValidateSet('win-x64')]
     [string] $Runtime = 'win-x64',
 
-    [Parameter(Mandatory = $true)]
     [uri] $ReleaseBaseUri,
 
     [string] $Publisher = 'CN=LexVerse Development',
@@ -25,11 +24,27 @@ param(
 
     [switch] $Unsigned,
 
+    [switch] $Store,
+
     [switch] $AllowInsecureReleaseUri
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+if ($Store) {
+    if ($Channel -ne 'stable') {
+        throw 'Store submissions use the stable identity. Use Store package flights for testing.'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
+        throw 'Do not provide a signing certificate for Store submissions; Microsoft signs the package.'
+    }
+    $storeIdentity = Get-Content -LiteralPath (Join-Path $repositoryRoot 'packaging\store-identity.json') -Raw | ConvertFrom-Json
+    $Publisher = $storeIdentity.Publisher
+    $PublisherDisplayName = $storeIdentity.PublisherDisplayName
+    $Unsigned = [switch]::new($true)
+}
 
 function Get-WindowsSdkTool {
     param([Parameter(Mandatory = $true)][string] $Name)
@@ -114,6 +129,9 @@ function New-PackageAsset {
 }
 
 $parsedVersion = [version]::Parse($Version)
+if ($Store -and $parsedVersion.Revision -ne 0) {
+    throw 'The Microsoft Store reserves the fourth version component; use a version ending in .0.'
+}
 foreach ($component in @($parsedVersion.Major, $parsedVersion.Minor, $parsedVersion.Build, $parsedVersion.Revision)) {
     if ($component -gt 65535) {
         throw 'Each MSIX version component must be between 0 and 65535.'
@@ -135,7 +153,10 @@ foreach ($component in @($parsedAppInstallerVersion.Major, $parsedAppInstallerVe
     }
 }
 
-if (-not $AllowInsecureReleaseUri -and $ReleaseBaseUri.Scheme -ne 'https') {
+if (-not $Store -and $null -eq $ReleaseBaseUri) {
+    throw 'ReleaseBaseUri is required for direct distribution.'
+}
+if (-not $Store -and -not $AllowInsecureReleaseUri -and $ReleaseBaseUri.Scheme -ne 'https') {
     throw 'ReleaseBaseUri must use HTTPS. Use -AllowInsecureReleaseUri only for local packaging tests.'
 }
 
@@ -189,8 +210,7 @@ if (-not $Unsigned) {
     }
 }
 
-$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$artifactRoot = Join-Path $repositoryRoot 'artifacts\release'
+$artifactRoot = Join-Path $repositoryRoot $(if ($Store) { 'artifacts\store' } else { 'artifacts\release' })
 $releaseRoot = Join-Path $artifactRoot "$Channel\$Version\$Runtime"
 $stagingRoot = Join-Path $releaseRoot 'staging'
 $packageRoot = Join-Path $stagingRoot 'package'
@@ -234,6 +254,9 @@ New-PackageAsset -Path (Join-Path $assetsRoot 'StoreLogo.png') -Width 50 -Height
 
 $isBeta = $Channel -eq 'beta'
 $packageName = if ($isBeta) { 'LexVerse.Desktop.Beta' } else { 'LexVerse.Desktop' }
+if ($Store) {
+    $packageName = $storeIdentity.Name
+}
 $displayName = if ($isBeta) { 'LexVerse Beta' } else { 'LexVerse' }
 $architecture = 'x64'
 $escapedPackageName = ConvertTo-XmlAttribute $packageName
@@ -255,6 +278,9 @@ $manifest = @"
     <Description>Realtime screen translation for Windows</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
+  <Resources>
+    <Resource Language="en-US" />
+  </Resources>
   <Dependencies>
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
   </Dependencies>
@@ -287,6 +313,47 @@ if ($LASTEXITCODE -ne 0) {
     throw "MakeAppx failed with exit code $LASTEXITCODE."
 }
 
+# Validate the archive itself, not only the staging directory.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [System.IO.Compression.ZipFile]::OpenRead($packagePath)
+try {
+    $manifestEntry = $archive.GetEntry('AppxManifest.xml')
+    if ($null -eq $manifestEntry) {
+        throw 'The MSIX does not contain AppxManifest.xml.'
+    }
+    $reader = [System.IO.StreamReader]::new($manifestEntry.Open())
+    try {
+        [xml] $packedManifest = $reader.ReadToEnd()
+    }
+    finally {
+        $reader.Dispose()
+    }
+
+    $namespaces = [System.Xml.XmlNamespaceManager]::new($packedManifest.NameTable)
+    $namespaces.AddNamespace('m', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10')
+    $namespaces.AddNamespace('uap', 'http://schemas.microsoft.com/appx/manifest/uap/windows10')
+    $packedPublisher = $packedManifest.SelectSingleNode('/m:Package/m:Properties/m:PublisherDisplayName', $namespaces)
+    if ($null -eq $packedPublisher -or [string]::IsNullOrWhiteSpace($packedPublisher.InnerText) -or
+        $packedPublisher.InnerText -cne $PublisherDisplayName) {
+        throw 'The packed PublisherDisplayName is empty or does not match the configured publisher.'
+    }
+    $language = $packedManifest.SelectSingleNode('/m:Package/m:Resources/m:Resource[@Language="en-US"]', $namespaces)
+    if ($null -eq $language) {
+        throw 'The MSIX must declare the default language en-US.'
+    }
+    $logoNodes = $packedManifest.SelectNodes('/m:Package/m:Properties/m:Logo | //uap:VisualElements/@Square44x44Logo | //uap:VisualElements/@Square150x150Logo | //uap:DefaultTile/@Wide310x150Logo', $namespaces)
+    foreach ($logoNode in $logoNodes) {
+        $assetPath = $logoNode.get_InnerText().Replace('\', '/')
+        $assetEntry = $archive.GetEntry($assetPath)
+        if ($null -eq $assetEntry -or $assetEntry.Length -eq 0) {
+            throw "The MSIX is missing a manifest logo: $assetPath"
+        }
+    }
+}
+finally {
+    $archive.Dispose()
+}
+
 if (-not $Unsigned) {
     $signTool = Get-WindowsSdkTool -Name 'SignTool.exe'
     & $signTool sign /fd SHA256 /sha1 $normalizedThumbprint /tr $TimestampUri.AbsoluteUri /td SHA256 $packagePath
@@ -300,6 +367,8 @@ if (-not $Unsigned) {
     }
 }
 
+$appInstallerPath = $null
+if (-not $Store) {
 $baseUri = $ReleaseBaseUri.AbsoluteUri.TrimEnd('/')
 $channelBaseUri = "$baseUri/$Channel"
 $appInstallerFileName = "LexVerse-$Channel.appinstaller"
@@ -322,6 +391,7 @@ $appInstaller = @"
 
 $appInstallerPath = Join-Path $releaseRoot $appInstallerFileName
 [System.IO.File]::WriteAllText($appInstallerPath, $appInstaller, [System.Text.UTF8Encoding]::new($false))
+}
 
 $packageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagePath).Hash.ToLowerInvariant()
 $hashPath = "$packagePath.sha256"
@@ -330,6 +400,7 @@ $hashPath = "$packagePath.sha256"
 Remove-Item -LiteralPath $stagingRoot -Recurse -Force
 
 [pscustomobject]@{
+    Distribution = if ($Store) { 'Microsoft Store' } else { 'Direct' }
     Channel = $Channel
     Version = $Version
     AppInstallerVersion = $AppInstallerVersion
