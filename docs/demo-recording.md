@@ -26,6 +26,18 @@ Chạy không có `--demo` để mở app dịch thật. Chế độ quay dùng 
 
 ## Bố trí và Recordly
 
+### Chỉ mở cửa sổ nội dung, không mở LexVerse
+
+```powershell
+# Mở cả bốn cửa sổ (build một lần trước khi mở).
+.\scripts\open-recording-content.ps1
+
+# Hoặc chỉ mở các ca được chọn, dùng bản đã build.
+.\scripts\open-recording-content.ps1 -Case article,letters -SkipBuild
+```
+
+Các cửa sổ chạy độc lập; tự đóng từng cửa sổ khi dùng xong. Không có phiên demo LexVerse điều khiển bản dịch soạn sẵn hoặc F6. Có thể dùng app dịch thật để dịch nội dung các cửa sổ này.
+
 1. Đóng phiên LexVerse thật đang chạy để giải phóng F6. Mở một ca; đợi app nội dung xuất hiện.
 2. Ở 1920×1080 hoặc 2560×1440, đặt LexVerse và app nội dung cạnh nhau nếu đủ chỗ; nếu không, chuyển bằng Alt+Tab. Cửa sổ nội dung tự chọn kích thước theo màn hình; vẫn có thể di chuyển, resize và phóng to như cửa sổ bình thường.
 3. Trong Recordly chọn quay **toàn màn hình**, bật con trỏ thật. Cần quay được cả thao tác trên LexVerse, bộ chọn vùng/cửa sổ và nội dung được dịch.
