@@ -648,6 +648,13 @@ public partial class MainWindow : Window
         IntPtr lParam,
         ref bool handled)
     {
+        if (message == 0x0024) // WM_GETMINMAXINFO
+        {
+            ApplyMaximizedWorkArea(hwnd, lParam);
+            handled = true;
+            return IntPtr.Zero;
+        }
+
         if (message == WmHotkey && wParam.ToInt32() == HotkeyId)
         {
             handled = true;

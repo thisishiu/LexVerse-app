@@ -278,6 +278,9 @@ $manifest = @"
     <Description>Realtime screen translation for Windows</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
+  <Resources>
+    <Resource Language="en-US" />
+  </Resources>
   <Dependencies>
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
   </Dependencies>
@@ -308,6 +311,47 @@ $packagePath = Join-Path $releaseRoot $packageFileName
 & $makeAppx pack /d $packageRoot /p $packagePath /o
 if ($LASTEXITCODE -ne 0) {
     throw "MakeAppx failed with exit code $LASTEXITCODE."
+}
+
+# Validate the archive itself, not only the staging directory.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [System.IO.Compression.ZipFile]::OpenRead($packagePath)
+try {
+    $manifestEntry = $archive.GetEntry('AppxManifest.xml')
+    if ($null -eq $manifestEntry) {
+        throw 'The MSIX does not contain AppxManifest.xml.'
+    }
+    $reader = [System.IO.StreamReader]::new($manifestEntry.Open())
+    try {
+        [xml] $packedManifest = $reader.ReadToEnd()
+    }
+    finally {
+        $reader.Dispose()
+    }
+
+    $namespaces = [System.Xml.XmlNamespaceManager]::new($packedManifest.NameTable)
+    $namespaces.AddNamespace('m', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10')
+    $namespaces.AddNamespace('uap', 'http://schemas.microsoft.com/appx/manifest/uap/windows10')
+    $packedPublisher = $packedManifest.SelectSingleNode('/m:Package/m:Properties/m:PublisherDisplayName', $namespaces)
+    if ($null -eq $packedPublisher -or [string]::IsNullOrWhiteSpace($packedPublisher.InnerText) -or
+        $packedPublisher.InnerText -cne $PublisherDisplayName) {
+        throw 'The packed PublisherDisplayName is empty or does not match the configured publisher.'
+    }
+    $language = $packedManifest.SelectSingleNode('/m:Package/m:Resources/m:Resource[@Language="en-US"]', $namespaces)
+    if ($null -eq $language) {
+        throw 'The MSIX must declare the default language en-US.'
+    }
+    $logoNodes = $packedManifest.SelectNodes('/m:Package/m:Properties/m:Logo | //uap:VisualElements/@Square44x44Logo | //uap:VisualElements/@Square150x150Logo | //uap:DefaultTile/@Wide310x150Logo', $namespaces)
+    foreach ($logoNode in $logoNodes) {
+        $assetPath = $logoNode.get_InnerText().Replace('\', '/')
+        $assetEntry = $archive.GetEntry($assetPath)
+        if ($null -eq $assetEntry -or $assetEntry.Length -eq 0) {
+            throw "The MSIX is missing a manifest logo: $assetPath"
+        }
+    }
+}
+finally {
+    $archive.Dispose()
 }
 
 if (-not $Unsigned) {
