@@ -6,6 +6,25 @@ import { GuideTarget } from "./GuideTarget";
 import type { AppRoute } from "../app/route-types";
 
 afterEach(cleanup);
+it("clips the settings tab opening and removes it when scrolled away", () => {
+  const { container } = render(<GuideProvider><div style={{ overflowY: "auto" }}><nav className="settings-tabs">Options</nav></div></GuideProvider>);
+  const tabs = container.querySelector<HTMLElement>(".settings-tabs")!;
+  const rect = (top: number, bottom: number) => ({ left: 100, right: 500, top, bottom, width: 400, height: bottom-top, x: 100, y: top, toJSON: () => ({}) });
+  vi.spyOn(tabs.parentElement!, "getBoundingClientRect").mockReturnValue(rect(100, 600));
+  const bounds = vi.spyOn(tabs, "getBoundingClientRect").mockReturnValue(rect(-20, 20));
+  fireEvent.click(screen.getByRole("button", { name: "User guide" }));
+  const opening = () => container.querySelector("mask rect[fill='black']");
+  expect(opening()).toHaveAttribute("y", "0");
+  expect(opening()).toHaveAttribute("height", "20");
+  bounds.mockReturnValue(rect(-40, -10));
+  fireEvent.scroll(tabs.parentElement!);
+  expect(opening()).toBeNull();
+  bounds.mockReturnValue(rect(120, 160));
+  fireEvent.scroll(tabs.parentElement!);
+  expect(opening()).toHaveAttribute("y", "120");
+  expect(opening()).toHaveAttribute("height", "40");
+});
+
 it("waits for confirmed consent across routes, then demonstrates without performing actions", async () => {
   let confirmConsent: () => void = () => {};
   const translate = vi.fn(), consent = vi.fn(() => new Promise<void>(resolve => { confirmConsent = resolve; })), notify = vi.fn();
