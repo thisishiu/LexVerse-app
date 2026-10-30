@@ -23,13 +23,18 @@
 
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
-    <Content Include="..\..\packaging\client.env" Link=".env">
+    <Content Include="..\..\packaging\client.env" Link=".env" Condition="Exists('..\..\packaging\client.env')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <TargetPath>.env</TargetPath>
     </Content>
     <Resource Include="..\LexVerse.Desktop.UI\src\assets\fonts\BeVietnamPro-*.ttf" Link="Fonts\%(Filename)%(Extension)" />
   </ItemGroup>
+
+  <Target Name="RequirePackagedClientEnvironment" BeforeTargets="Publish"
+          Condition="!Exists('$(MSBuildProjectDirectory)\..\..\packaging\client.env')">
+    <Error Text="packaging/client.env is required to publish LexVerse." />
+  </Target>
 
   <Target Name="BuildDesktopUi" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
     <Error Condition="!Exists('$(DesktopUiRoot)\package-lock.json')" Text="Desktop UI package-lock.json is missing." />

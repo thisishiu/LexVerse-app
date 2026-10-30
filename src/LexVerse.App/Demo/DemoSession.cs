@@ -25,6 +25,9 @@ internal sealed class DemoSession : IDisposable
     public RealtimeCoordinatorState State { get; private set; } = RealtimeCoordinatorState.Stopped;
     public event EventHandler? Changed;
 
+    public bool IsSampleWindow(WindowCaptureTarget target) =>
+        _sample is { HasExited: false } && target.ProcessId == (uint)_sample.Id;
+
     public DemoSession(string caseId)
     {
         if (caseId is not ("article" or "game" or "letters" or "comic"))
@@ -63,9 +66,10 @@ internal sealed class DemoSession : IDisposable
         object style, WindowCaptureTarget? window = null)
     {
         EnsurePair(source, target);
-        if (kind == RealtimeCaptureKind.Window && window?.ProcessId != (uint?)_sample?.Id)
+        if (kind == RealtimeCaptureKind.Window && (window is null || !IsSampleWindow(window)))
             throw new InvalidOperationException("Hãy chọn cửa sổ nội dung của ca quay đang mở.");
-        await SendAsync(new { operation = "start", kind = kind.ToString().ToLowerInvariant(), bounds, style });
+        try { await SendAsync(new { operation = "start", kind = kind.ToString().ToLowerInvariant(), bounds, style }); }
+        catch { SetStopped(); throw; }
         FocusSample();
         State = new(RealtimeCoordinatorStatus.Running, kind);
         Changed?.Invoke(this, EventArgs.Empty);

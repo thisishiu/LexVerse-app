@@ -25,7 +25,14 @@ internal sealed class SampleAppWindow : Window
     {
         _caseId = caseId; _pipe = pipe; _parent = parent;
         Title = caseId switch { "article" => "Fieldnotes Reader", "game" => "Starfall", "letters" => "Postbox", "comic" => "After Rain Reader", _ => throw new ArgumentException("Unknown application.") };
-        Width = 1240; Height = 860; MinWidth = 780; MinHeight = 540;
+        MinWidth = 780; MinHeight = 540;
+        var workArea = SystemParameters.WorkArea;
+        Width = Math.Min(workArea.Width - 40, caseId == "article"
+            ? Math.Clamp(workArea.Width * .72, 980, 1680)
+            : Math.Clamp(workArea.Width * .68, 1100, 1760));
+        Height = Math.Min(workArea.Height - 40, caseId == "article"
+            ? Math.Clamp(workArea.Height * .82, 680, 1120)
+            : Math.Clamp(workArea.Height * .82, 720, 1120));
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Icon = CreateIcon(caseId);
         Content = _view;

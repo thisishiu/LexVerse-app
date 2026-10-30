@@ -11,6 +11,9 @@ in portable ZIP distributions as well. Never add credentials, private keys, or
 developer localhost settings to this file. The repository-root `.env` and
 `.env.local` are not distribution inputs.
 
+Local builds can omit `packaging/client.env`; the app then reads the repository-root
+`.env` during development. Publishing still requires `packaging/client.env`.
+
 Run from the repository root on Windows with the .NET SDK and Windows SDK packaging tools installed:
 
 Set `LEXVERSE_PLANS_URL` in `packaging/client.env` to the official public HTTPS

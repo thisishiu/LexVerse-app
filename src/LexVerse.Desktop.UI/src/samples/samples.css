@@ -33,28 +33,28 @@ main { overflow: auto; min-height: 0; }
 @keyframes translation-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 
 /* Fieldnotes Reader */
-.reader-shell { height: 100%; display: grid; grid-template-columns: 235px 1fr; grid-template-rows: 70px 1fr; background: #fbfaf7; }
+.reader-shell { height: 100%; display: grid; grid-template-columns: clamp(235px, 19%, 300px) minmax(0, 1fr); grid-template-rows: 78px minmax(0, 1fr); background: #fbfaf7; }
 .reader-header { grid-column: 1 / -1; display: flex; align-items: center; gap: 25px; border-bottom: 1px solid #e3e2db; padding: 0 28px; background: #fbfaf7; }
 .fieldnotes-logo { font: italic 42px Georgia, serif; display: flex; align-items: center; gap: 13px; color: #485a41; }
 .fieldnotes-logo span { font: 600 15px "Be Vietnam Pro", sans-serif; letter-spacing: 3px; }
 .header-divider { height: 22px; width: 1px; background: #d7d7cc; }
 .reader-subtitle { color: #8d8f82; font: italic 15px Georgia, serif; }
 .reader-save { margin-left: auto; border: 1px solid #d4d9c9; border-radius: 6px; padding: 9px 14px; color: #536449; font-size: 12px; }
-.reader-sidebar { border-right: 1px solid #e3e2db; padding: 35px 18px; background: #f2f2ea; display: flex; flex-direction: column; }
+.reader-sidebar { border-right: 1px solid #e3e2db; padding: 35px 24px; background: #f2f2ea; display: flex; flex-direction: column; min-height: 0; overflow: auto; }
 .sidebar-label { font-size: 9px; letter-spacing: 1.5px; color: #959889; display: block; line-height: 1.7; }
 .reader-sidebar h2 { margin: 10px 0 22px; font: 30px Georgia, serif; }
-.reader-sidebar input { width: 100%; border: 1px solid #dbddd1; border-radius: 5px; background: #ffffff70; padding: 10px; font-size: 11px; margin-bottom: 35px; }
-.reader-sidebar > button { text-align: left; padding: 17px 12px; border-radius: 7px; margin-top: 12px; font-size: 13px; line-height: 1.5; }
+.reader-sidebar input { width: 100%; border: 1px solid #dbddd1; border-radius: 5px; background: #ffffff70; padding: 10px; font-size: 13px; margin-bottom: 35px; }
+.reader-sidebar > button { text-align: left; padding: 17px 12px; border-radius: 7px; margin-top: 12px; font-size: 15px; line-height: 1.5; }
 .reader-sidebar > button.active { background: #e0e5d6; color: #405139; }
 .reader-sidebar button > span { display: block; font-size: 10px; color: #9a9e8f; margin-bottom: 6px; }
-.reader-sidebar small { display: block; color: #8c9281; font-size: 10px; margin-top: 8px; }
+.reader-sidebar small { display: block; color: #8c9281; font-size: 11px; margin-top: 8px; }
 .library-note { margin-top: auto; padding: 35px 8px 10px; color: #9ca28e; font: italic 25px/1.2 Georgia, serif; }
-.article-scroll { padding: 22px 6% 55px; }
+.article-scroll { padding: 32px clamp(32px, 6%, 96px) 65px; }
 .article-toolbar { display: flex; justify-content: space-between; align-items: center; color: #8b8e81; font-size: 9px; letter-spacing: 1.2px; padding-bottom: 27px; }
 .article-toolbar button { font-size: 13px; padding: 5px 9px; border: 1px solid #e0e2d7; margin-left: 5px; border-radius: 4px; }
-.article-scroll article { max-width: 790px; margin: auto; }
+.article-scroll article { max-width: 940px; margin: auto; }
 .article-kicker { font-size: 10px; letter-spacing: 2px; color: #8b997c; }
-.article-title { font: 3em/1.17 Georgia, serif; letter-spacing: -1.5px; margin: 16px 0 25px; min-height: 1.3em; }
+.article-title { font: 3.3em/1.17 Georgia, serif; margin: 16px 0 25px; min-height: 1.3em; }
 .article-title .reading-translation { font-size: calc(29px * var(--font-scale, 1)); }
 .byline { display: flex; align-items: center; gap: 12px; font-size: 12px; margin-bottom: 25px; }
 .avatar { display: grid; place-items: center; border-radius: 50%; width: 35px; height: 35px; background: #e1e5d9; color: #65735c; font-size: 10px; }
@@ -62,8 +62,8 @@ main { overflow: auto; min-height: 0; }
 .article-art { position: relative; overflow: hidden; height: 215px; border-radius: 3px; background: #e1e5d6; display: flex; align-items: center; padding: 30px 45px; margin-bottom: 28px; }
 .article-art > span { font: italic 3.1em/1.05 Georgia, serif; color: #59694d; letter-spacing: -2px; z-index: 1; }
 .art-circle { position: absolute; width: 330px; height: 330px; border-radius: 50%; border: 40px solid #c9d1bc; right: -60px; top: -45px; }
-.article-lede { font: 1.4em/1.65 Georgia, serif; min-height: 135px; margin: 0 0 25px; }
-.article-paragraph { font: 1.2em/1.85 Georgia, serif; margin: 0 0 28px; min-height: 100px; }
+.article-lede { font: 1.55em/1.65 Georgia, serif; min-height: 135px; margin: 0 0 25px; }
+.article-paragraph { font: 1.28em/1.85 Georgia, serif; margin: 0 0 34px; min-height: 100px; }
 .article-scroll hr { border: 0; border-top: 1px solid #e0e2d7; margin: 40px 0; }
 .article-end { color: #949889; font: italic 18px/1.6 Georgia, serif; }
 .next-article { padding: 20px 0; color: #566a46; font-size: 13px; }
@@ -73,7 +73,7 @@ main { overflow: auto; min-height: 0; }
 .game-world { position: absolute; inset: 0; overflow: hidden; background: linear-gradient(135deg, #12283a, #304a54 65%, #68796d); pointer-events: none; }
 .game-header { grid-column: 1 / -1; display: flex; align-items: center; gap: 45px; padding: 0 35px; z-index: 1; border-bottom: 1px solid #d8dcc32b; }
 .starfall-logo { font: 23px Georgia, serif; letter-spacing: 5px; }
-.game-header > span:nth-child(2) { font-size: 13px; color: #c2c9b4; }
+.game-header-log { font-size: 13px; color: #c2c9b4; }
 .player-avatar { margin-left: auto; border: 1px solid #b8c5a3; border-radius: 50%; width: 38px; height: 38px; display: grid; place-items: center; font: 22px Georgia, serif; }
 .game-moon { position: absolute; width: 120px; height: 120px; border-radius: 50%; background: #e0ddb9; right: 14%; top: 17%; box-shadow: 0 0 100px #e6e0b82b; }
 .ridge { position: absolute; bottom: 0; right: -5%; width: 110%; height: 65%; background: #142e3c99; clip-path: polygon(0 100%, 0 60%, 18% 22%, 33% 57%, 61% 0, 80% 36%, 100% 15%, 100% 100%); }
@@ -83,10 +83,18 @@ main { overflow: auto; min-height: 0; }
 .lighthouse i { display: block; height: 25px; margin-top: 25px; background: #e9dc99; box-shadow: 0 0 35px #ead699; }
 .quest-list { z-index: 1; padding: 40px 25px; background: #10222d75; }
 .quest-list > span { font-size: 9px; letter-spacing: 2px; color: #9caeaa; }
-.quest-list h2 { font-size: 18px; font-weight: 400; margin: 13px 0 30px; }
+.quest-journal-title { font-size: 18px; font-weight: 400; margin: 13px 0 30px; }
 .quest-list button { display: block; width: 100%; text-align: left; margin-bottom: 15px; padding: 20px 15px; border-left: 2px solid transparent; font-size: 15px; }
 .quest-list button.active { background: #c5d2b412; border-left-color: #c6cba1; }
 .quest-list small { display: block; color: #92a49d; font-size: 9px; letter-spacing: 1px; margin-bottom: 8px; }
+.quest-menu-text { min-height: 45px; font-size: 14px; line-height: 1.45; }
+.game-ui { line-height: inherit; min-width: 0; }
+.game-ui > .reading-translation,
+.game-ui > .reading-translation.light {
+  display: block; padding: 0; border: 0; border-radius: 0; background: transparent;
+  color: inherit; box-shadow: none; overflow: visible; font: inherit; line-height: inherit;
+  animation: none;
+}
 .quest-scroll { z-index: 1; padding: 35px 55px 30px 40px; }
 .quest-card { max-width: 750px; padding: 30px 35px; border: 1px solid #b3c4b437; background: #152c37d9; box-shadow: 0 12px 70px #0002; }
 .quest-number { font-size: 10px; letter-spacing: 2px; color: #c0c5a4; }
@@ -168,12 +176,27 @@ main { overflow: auto; min-height: 0; }
 .person-three:before { width: 60px; height: 68px; left: 5px; top: -53px; }
 .speech-bubble { position: absolute; z-index: 3; left: 7%; top: 7%; width: 85%; min-height: 140px; border: 2px solid #343a42; border-radius: 50%; background: #fffdf4; padding: 24px 32px; display: grid; align-items: center; justify-content: center; text-align: center; color: #363b43; font-size: 24px; line-height: 1.6; }
 .bubble-two { top: 37%; }
-.speech-bubble .reading-translation { position: absolute; inset: 0; border-radius: 50%; background: #fffdf4; color: #303b46; box-shadow: none; justify-content: center; padding: 20px 30px; font-size: calc(22px * var(--font-scale, 1)); }
+.speech-bubble .reading-translation { position: absolute; grid-area: auto; inset: 0; border: 0; border-radius: inherit; background: transparent; color: #303b46; box-shadow: none; justify-content: center; padding: 20px 30px; font-size: calc(22px * var(--font-scale, 1)); }
 .panel-caption { position: absolute; left: 18px; bottom: 16px; color: #e3e3d5; font-size: 11px; letter-spacing: 2px; z-index: 4; }
 .comic-navigation { display: flex; justify-content: center; align-items: center; gap: 65px; border-top: 1px solid #ffffff13; font-size: 12px; }
 .comic-navigation button { padding: 10px 20px; color: #c9b7b7; }
 .comic-navigation > span { font-size: 15px; letter-spacing: 2px; color: #e3cbc2; }
 .comic-navigation i { color: #736a77; font-size: 11px; font-style: normal; }
+
+@media (min-width: 1500px) {
+  .game-shell { grid-template-columns: 290px minmax(0, 1fr); }
+  .quest-list { padding: 45px 30px; }
+  .quest-scroll { padding: 42px 55px; }
+  .quest-card { max-width: 980px; margin: 0 auto; padding: 36px 42px; }
+  .mail-shell { grid-template-columns: 210px 310px minmax(0, 1fr); }
+  .letter-scroll { padding: 0 48px 50px; }
+  .letter-body { max-width: 1100px; }
+  .comic-page { max-width: 1560px; }
+  .comic-panel { min-height: clamp(760px, calc(100vh - 220px), 1080px); }
+  .speech-bubble { min-height: 175px; font-size: 27px; }
+  .speech-bubble .reading-translation { font-size: calc(24px * var(--font-scale, 1)); }
+  .reading-popup { width: min(520px, calc(100vw - 30px)); }
+}
 
 @media (max-width: 1050px) {
   .reader-shell { grid-template-columns: 200px 1fr; }
@@ -189,4 +212,13 @@ main { overflow: auto; min-height: 0; }
   .world-clock { display: none; }
   .comic-scroll { padding: 20px; }
   .speech-bubble { font-size: 21px; padding: 20px; }
+}
+
+@media (min-width: 1800px) {
+  .reader-shell { grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: 88px minmax(0, 1fr); }
+  .reader-header { padding: 0 42px; }
+  .reader-sidebar { padding: 45px 30px; }
+  .article-scroll { padding: 42px 8% 80px; }
+  .article-scroll article { max-width: 1080px; }
+  .article-art { height: 260px; }
 }

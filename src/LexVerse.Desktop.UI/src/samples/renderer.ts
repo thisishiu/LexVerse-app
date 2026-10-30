@@ -1,4 +1,4 @@
-import { apps, centerInside, terms, type AppId, type Bounds, type TextBlock } from "./content";
+import { apps, centerInside, gameChrome, terms, type AppId, type Bounds, type TextBlock } from "./content";
 
 export interface RenderStyle { opacity?: number; fontScale?: number; dark?: boolean; closeOnOutsideClick?: boolean; allowDragging?: boolean }
 export interface SampleRequest { operation: string; kind?: string; bounds?: Bounds; text?: string; style?: RenderStyle }
@@ -25,7 +25,7 @@ export function findTranslation(appId: AppId, text: string): TextBlock | undefin
 export class SampleRenderer {
   private running = false;
   private kind = "window";
-  private selectedIds = new Set<string>();
+  private regionBounds: Bounds | null = null;
   private pending = new Map<string, ReturnType<typeof setTimeout>>();
   private style: RenderStyle = {};
   private selection: { text: string; rect: DOMRect } | null = null;
@@ -39,7 +39,20 @@ export class SampleRenderer {
   }
 
   private blocks = () => Array.from(document.querySelectorAll<HTMLElement>(".source-block"));
-  private data = (id: string) => apps[this.appId].pages.flatMap(page => page.blocks).find(block => block.id === id);
+  private data = (id: string) => apps[this.appId].pages.flatMap(page => page.blocks).find(block => block.id === id)
+    ?? (this.appId === "game" ? Object.values(gameChrome).find(block => block.id === id) : undefined);
+  private inCaptureArea = (element: HTMLElement) => {
+    const rect = element.getBoundingClientRect();
+    const viewport = { x: 0, y: 0, width: innerWidth, height: innerHeight };
+    const scrollArea = element.closest("main")?.getBoundingClientRect();
+    return centerInside(rect, viewport)
+      && (!scrollArea || centerInside(rect, scrollArea))
+      && (this.kind !== "region" || (this.regionBounds !== null && centerInside(rect, this.regionBounds)));
+  };
+  private removeTranslation(element: HTMLElement) {
+    element.querySelector(":scope > .reading-translation")?.remove();
+    element.classList.remove("has-translation");
+  }
   private rememberSelection = () => {
     const selection = window.getSelection();
     if (!selection?.rangeCount || !selection.toString().trim()) { this.selection = null; return; }
@@ -59,17 +72,15 @@ export class SampleRenderer {
         this.clear();
         this.style = request.style ?? {};
         this.kind = request.kind ?? "window";
-        const visible = { x: 0, y: 0, width: innerWidth, height: innerHeight };
-        this.selectedIds = new Set(this.blocks().filter(element => centerInside(element.getBoundingClientRect(), visible)
-          && (this.kind !== "region" || (viewportBounds && centerInside(element.getBoundingClientRect(), viewportBounds))))
-          .map(element => element.dataset.block!));
-        if (!this.selectedIds.size) return { error: "Không có khối nội dung nào trong vùng đã chọn. Hãy chọn vùng chứa đoạn văn." };
+        this.regionBounds = this.kind === "region" ? viewportBounds ?? null : null;
+        const count = this.blocks().filter(this.inCaptureArea).length;
+        if (!count) return { error: "Không có khối nội dung nào trong vùng đã chọn. Hãy chọn vùng chứa đoạn văn." };
         this.running = true;
         this.refresh();
-        return { ok: true, count: this.selectedIds.size };
+        return { ok: true, count };
       }
       case "refresh": this.refresh(); return { ok: true };
-      case "stop": this.running = false; this.cancelPending(); return { ok: true };
+      case "stop": this.clear(); return { ok: true };
       case "clear": this.clear(); return { ok: true };
       case "quick": return { text: findTranslation(this.appId, request.text ?? "")?.translation ?? null };
       case "popup": {
@@ -89,17 +100,26 @@ export class SampleRenderer {
     let index = 0;
     for (const element of this.blocks()) {
       const id = element.dataset.block!;
-      if (this.kind === "region" && !this.selectedIds.has(id)) continue;
-      const rect = element.getBoundingClientRect();
-      if (rect.bottom <= 55 || rect.top >= innerHeight || element.querySelector(".reading-translation") || this.pending.has(id)) continue;
+      const displayed = element.querySelector<HTMLElement>(":scope > .reading-translation");
+      if (displayed && displayed.dataset.block !== id) this.removeTranslation(element);
+      if (!this.inCaptureArea(element)) {
+        if (this.kind === "region") {
+          const timer = this.pending.get(id);
+          if (timer !== undefined) { clearTimeout(timer); this.pending.delete(id); }
+          this.removeTranslation(element);
+        }
+        continue;
+      }
+      if (element.querySelector(".reading-translation") || this.pending.has(id)) continue;
       const block = this.data(id);
       if (!block) continue;
       const generation = this.generation;
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        if (!this.running || generation !== this.generation || !element.isConnected) return;
+        if (!this.running || generation !== this.generation || !element.isConnected || element.dataset.block !== id || !this.inCaptureArea(element)) return;
         const box = document.createElement("div");
         box.className = "reading-translation";
+        box.dataset.block = id;
         box.textContent = block.translation;
         box.style.setProperty("--box-opacity", String(this.style.opacity ?? .96));
         box.style.setProperty("--font-scale", String(this.style.fontScale ?? 1));
@@ -113,14 +133,15 @@ export class SampleRenderer {
 
   pageChanged() {
     this.cancelPending(); this.closePopup(); this.selection = null;
+    this.blocks().forEach(element => this.removeTranslation(element));
     if (this.running) this.refresh();
   }
 
   private cancelPending() { this.generation++; for (const timer of this.pending.values()) clearTimeout(timer); this.pending.clear(); }
   private clear() {
     this.running = false; this.cancelPending(); this.closePopup();
-    document.querySelectorAll(".reading-translation").forEach(element => element.remove());
-    this.blocks().forEach(element => element.classList.remove("has-translation"));
+    this.regionBounds = null;
+    this.blocks().forEach(element => this.removeTranslation(element));
   }
   private closePopup() { document.querySelector(".reading-popup")?.remove(); }
 

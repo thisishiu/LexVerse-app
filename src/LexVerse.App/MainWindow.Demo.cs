@@ -37,15 +37,15 @@ public partial class MainWindow
         finally { PublishDesktopSnapshot(); }
     }
 
-    private Task StartDemoRealtimeAsync(RealtimeCaptureKind kind, ScreenRect bounds, WindowCaptureTarget? window = null) =>
-        RunDemoOperationAsync(async () =>
-        {
-            if (!_privacyPreferences.Current.AllowRemoteTextProcessing)
-                throw new InvalidOperationException("Hãy bật xử lý văn bản trong cài đặt trước khi bắt đầu.");
-            _realtimeStartErrorCode = null;
-            await _demo!.StartAsync(kind, bounds, _sourceLanguage, _targetLanguage, DemoStyle(), window);
-            _status = "Translation running.";
-        });
+    private async Task StartDemoRealtimeAsync(RealtimeCaptureKind kind, ScreenRect bounds, WindowCaptureTarget? window = null)
+    {
+        if (!_privacyPreferences.Current.AllowRemoteTextProcessing)
+            throw new InvalidOperationException("Hãy bật xử lý văn bản trong cài đặt trước khi bắt đầu.");
+        _realtimeStartErrorCode = null;
+        await _demo!.StartAsync(kind, bounds, _sourceLanguage, _targetLanguage, DemoStyle(), window);
+        _status = "Translation running.";
+        PublishDesktopSnapshot();
+    }
 
     private Task RunDemoPopupAsync() => RunDemoOperationAsync(async () =>
     {

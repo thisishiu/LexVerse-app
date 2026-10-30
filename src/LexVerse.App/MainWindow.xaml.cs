@@ -372,15 +372,11 @@ public partial class MainWindow : Window
         {
             if (_demo is not null) await _demo.StopAsync();
             await _realtimeModule.Coordinator.StopAsync();
-            WindowState = WindowState.Minimized;
-            await Task.Delay(160);
             var selector = new SelectionOverlayWindow();
             var selected = selector.ShowDialog();
 
             if (selected != true || selector.Selection is not { } selection)
             {
-                WindowState = WindowState.Normal;
-                Activate();
                 _status = "Region selection canceled.";
                 return;
             }
@@ -393,6 +389,7 @@ public partial class MainWindow : Window
         }
         finally
         {
+            Activate();
             _isSelectingRegion = false;
             PublishDesktopSnapshot();
         }
@@ -417,7 +414,7 @@ public partial class MainWindow : Window
     {
         if (_demo is not null)
         {
-            await RunDemoOperationAsync(() => _demo.StopAsync());
+            await _demo.StopAsync();
             _status = "Realtime translation stopped.";
             return;
         }

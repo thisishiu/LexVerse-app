@@ -299,7 +299,8 @@ public partial class MainWindow
 
             case "realtime.listWindows":
                 CancelWindowPreviews();
-                return _windowTargets.Refresh();
+                var windows = _windowTargets.Refresh();
+                return _demo is null ? windows : windows.Where(entry => _demo.IsSampleWindow(_windowTargets.Resolve(entry.Id))).ToArray();
 
             case "realtime.startWindow":
             {

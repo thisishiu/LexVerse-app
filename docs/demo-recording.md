@@ -6,7 +6,7 @@ Các app nội dung có tên, biểu tượng và giao diện riêng; không ch�
 
 ## Mở từng ca
 
-Đóng phiên quay trước khi mở ca mới để F6 không bị tranh chấp. Từ thư mục `lexverse-app`:
+Đóng phiên quay trước khi mở ca mới để F6 không bị tranh chấp. Từ thư mục gốc của repo:
 
 ```powershell
 .\scripts\record-article.ps1
@@ -27,7 +27,7 @@ Chạy không có `--demo` để mở app dịch thật. Chế độ quay dùng 
 ## Bố trí và Recordly
 
 1. Đóng phiên LexVerse thật đang chạy để giải phóng F6. Mở một ca; đợi app nội dung xuất hiện.
-2. Ưu tiên màn hình 1920×1080. Đặt LexVerse và app nội dung cạnh nhau nếu đủ chỗ; nếu không, chuyển bằng Alt+Tab. Có thể di chuyển, resize và phóng to app nội dung như cửa sổ bình thường.
+2. Ở 1920×1080 hoặc 2560×1440, đặt LexVerse và app nội dung cạnh nhau nếu đủ chỗ; nếu không, chuyển bằng Alt+Tab. Cửa sổ nội dung tự chọn kích thước theo màn hình; vẫn có thể di chuyển, resize và phóng to như cửa sổ bình thường.
 3. Trong Recordly chọn quay **toàn màn hình**, bật con trỏ thật. Cần quay được cả thao tác trên LexVerse, bộ chọn vùng/cửa sổ và nội dung được dịch.
 4. Quay thử 5–10 giây trước take chính; kiểm tra chữ Nhật/Hàn/Trung, box dịch và popup có trong bản ghi. Font Việt đi kèm ứng dụng; CJK dùng font Windows cục bộ.
 5. Giữ kết quả 4–6 giây trước thao tác tiếp theo để người xem đọc được. Tắt thông báo desktop trước khi quay nếu cần.
@@ -39,10 +39,10 @@ Không có nút điều khiển quay trong app mẫu. Dùng nút dừng và xóa
 Lệnh: `scripts/record-article.ps1`. Cặp mặc định: English → Vietnamese, chế độ Tài liệu.
 
 1. Đọc/lướt bài **A quieter way to work**. Cuộn một chút để phần mở bài nằm giữa cửa sổ.
-2. Chuyển sang LexVerse, bấm **Vùng**. LexVerse thu nhỏ như luồng gốc.
+2. Chuyển sang LexVerse, bấm **Vùng**. LexVerse vẫn mở bên dưới lớp chọn; kéo vùng trên bài viết rồi thả chuột.
 3. Kéo vùng quanh đoạn “Great tools disappear into your workflow…”; nhả chuột. Chỉ các khối có tâm nằm trong vùng chọn được dịch.
-4. Giữ hình 4–6 giây. Cuộn nhẹ để thấy box đi cùng đoạn văn.
-5. Trở lại LexVerse, bấm dừng và xóa lớp phủ. Có thể kéo vùng khác để quay lại.
+4. Giữ hình 4–6 giây. Cuộn nhẹ: box rời khỏi vùng chọn sẽ ẩn; nội dung mới đi vào vùng được dịch.
+5. Trở lại LexVerse, bấm dừng để ẩn bản dịch. Có thể kéo vùng khác để quay lại.
 6. Take bổ sung: dùng **Dịch theo app**, chọn **Fieldnotes Reader** và bắt đầu. Cuộn xuống rồi chọn bài **The art of noticing** ở thanh thư viện: nội dung mới được dịch khi phiên vẫn chạy.
 
 Kết quả chính:
@@ -60,10 +60,10 @@ Kết quả chính:
 Lệnh: `scripts/record-game.ps1`. Cặp mặc định: Japanese → English, chế độ Hội thoại game.
 
 1. Trên LexVerse bấm **Dịch theo app**, chọn cửa sổ **Starfall**, bấm bắt đầu.
-2. Giữ nhiệm vụ đầu 4–6 giây. LYRA, HP, MP và EXP giữ nguyên.
-3. Bấm nhiệm vụ **灯台の約束** ở bên trái hoặc nút chuyển nhiệm vụ ở cuối thẻ. Chờ các box mới hiện lần lượt.
+2. Đợi các dòng tiếng Nhật trong tiêu đề phụ, thanh nhiệm vụ, nội dung thẻ và nút điều khiển chuyển sang tiếng Anh; giữ nhiệm vụ đầu 4–6 giây. LYRA, HP, MP và EXP giữ nguyên.
+3. Bấm nhiệm vụ **灯台の約束** ở bên trái hoặc nút chuyển nhiệm vụ ở cuối thẻ. Chờ các box của nhiệm vụ mới hiện lần lượt; bản dịch nhiệm vụ cũ phải biến mất.
 4. Bấm nút theo dõi nhiệm vụ để có thêm tương tác thật trong khung hình.
-5. Dừng bằng nút dừng của LexVerse. Kết quả đã hiện được giữ lại; xóa lớp phủ để quay lại từ đầu.
+5. Dừng bằng nút dừng của LexVerse; tất cả box sẽ ẩn. Bắt đầu lại để quay lượt khác.
 
 Nguồn: 星の谷への旅 → Journey to Starfall Valley.
 
@@ -77,7 +77,7 @@ Lệnh: `scripts/record-letters.ps1`. Cặp mặc định: Korean → Vietnamese
 
 1. Mở thư đầu trong **Postbox**. Kéo chuột bôi đen trọn câu/đoạn: **천천히 가도 괜찮아요. 중요한 건 멈추지 않는 거예요.**
 2. Nhấn **F6** khi con trỏ đang ở Postbox. Popup hiện gần phần được chọn, chứa bản dịch và từ vựng.
-3. Kéo tiêu đề popup một đoạn ngắn, giữ 4–6 giây, bấm × để đóng.
+3. Kéo tiêu đề popup một đoạn ngắn, giữ 4–6 giây, bấm × để đóng. Bấm dừng/xóa lớp phủ trên LexVerse cũng đóng popup đang hiện.
 4. Chọn câu **당신의 새로운 시작을 응원해요.**, nhấn F6 để nhận kết quả khác.
 5. Take bổ sung: mở thư **주말에 만나요**, bôi đen **토요일 오후에 강변을 함께 걸을까요?**, nhấn F6.
 
@@ -93,7 +93,7 @@ Lệnh: `scripts/record-comic.ps1`. Cặp mặc định: Chinese → Vietnamese,
 
 1. Mở trang 01, chuyển sang LexVerse và bấm **Toàn màn hình** hoặc chọn app **After Rain Reader**.
 2. Hai bóng thoại hiện bản dịch bên trong khung truyện. Giữ hình 4–6 giây.
-3. Bấm **下一页 →** ở thanh dưới. Trang 02 xuất hiện và nhận bản dịch mới.
+3. Bấm **下一页 →** ở thanh dưới. Trang 02 xuất hiện và nhận bản dịch mới; không còn bản dịch của trang 01.
 4. Có thể bấm **← 上一页** để quay lại, rồi dừng/xóa lớp phủ trong LexVerse.
 
 Trang 01:
@@ -109,8 +109,8 @@ Trang 02:
 ## Giới hạn và kiểm chứng
 
 - Mỗi ca chỉ dịch app nội dung đi kèm và cặp ngôn ngữ được chuẩn bị. Chọn cửa sổ khác hoặc cặp khác sẽ báo rõ, không gọi dịch thật.
-- Dịch vùng chọn khối theo tâm tại lúc bắt đầu; các box sau đó đi cùng nội dung khi cuộn/resize. Muốn dịch trang/bài khác liên tục, dùng dịch theo app hoặc toàn màn hình.
-- Stop dừng các kết quả chưa hiện và giữ box đã hiện. Xóa lớp phủ xóa box/popup và dừng phiên demo. Bắt đầu phiên mới xóa kết quả trước.
+- Dịch vùng bám theo khung màn hình đã chọn: khi cuộn, box rời khỏi khung sẽ ẩn và khối mới đi vào khung sẽ được dịch. Muốn dịch toàn bộ trang/bài liên tục, dùng dịch theo app hoặc toàn màn hình.
+- Dừng hoặc xóa lớp phủ đều ẩn box/popup và dừng phiên demo. Bắt đầu phiên mới xóa kết quả trước.
 - Box/popup nằm trong WebView của app nội dung, không bật khả năng ghi hình cho overlay thật và không chạy OCR thật.
 - Nội dung dữ liệu: `src/LexVerse.Desktop.UI/src/samples/content.ts`. Hai trạng thái mỗi app là nội dung độc lập, không có lịch phát tự động.
 
@@ -127,4 +127,4 @@ node scripts/demo-qa.mjs
 
 Script trình duyệt dùng Playwright có sẵn tại `.ui-qa/node_modules` của workspace, hoặc module URL qua `PLAYWRIGHT_MODULE`. Ảnh kiểm tra nằm trong `.tmp/sample-qa/`. Tỷ lệ device scale 1/1.5 kiểm tra bố cục trên trình duyệt; vẫn cần quay thử Recordly và kiểm tra DPI Windows native trước take chính.
 
-Kết quả kiểm chứng bản này: build WPF/frontend thành công, không warning/lỗi compiler; 55/55 test frontend qua khi chạy `npx vitest run --maxWorkers 1 --testTimeout 15000`. Kiểm tra trình duyệt qua cho bốn app ở device scale 1 và 1.5, bao gồm vùng chọn, popup theo lựa chọn, kéo/đóng, cuộn, đổi nội dung, dừng/xóa và không có request tài nguyên ra ngoài. Smoke test native qua cho bốn WebView2 với named pipe thật, cùng khởi động MainWindow gốc và tiến trình nội dung độc lập. Chưa quay video Recordly thực tế hoặc tự động kiểm tra toàn bộ thao tác chuột/phím tắt xuyên qua hai cửa sổ native.
+Kết quả kiểm chứng bản này: build WPF/frontend thành công, không warning/lỗi compiler; 58/58 test frontend qua. Kiểm tra trình duyệt qua cho bốn app ở device scale 1 và 1.5, cùng kích thước 2560×1440: dịch vùng/cuộn, đổi bài/nhiệm vụ/trang, toàn bộ chữ Nhật hiển thị trong Starfall, nội dung bản dịch mới, popup của hai thư, kéo/đóng, dừng/xóa/bắt đầu lại và không có request tài nguyên ra ngoài. Smoke test native qua cho bốn WebView2 với named pipe thật, cùng khởi động MainWindow gốc và tiến trình nội dung độc lập. Chưa quay video Recordly thực tế hoặc tự động kiểm tra toàn bộ thao tác chuột/phím tắt xuyên qua hai cửa sổ native.
