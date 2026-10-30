@@ -1,5 +1,29 @@
 # LexVerse Windows distribution
 
+## MSI for GitHub Releases
+
+From `release/msi`, run on Windows with .NET 10 SDK and Node.js/npm:
+
+```powershell
+.\scripts\package-msi.ps1 -Version 1.0.0
+```
+
+The script installs WiX 6.0.2 locally if needed and produces
+`artifacts/msi/1.0.0/win-x64/LexVerse-1.0.0-x64.msi` and `.msi.sha256`.
+Upload these two files as GitHub Release assets, not the publish directory.
+The installer targets Windows 10 build 19041+ x64, installs per-machine
+(administrator permission required), adds a Start menu shortcut, and supports
+major upgrades while blocking downgrades. Use increasing three-part MSI versions.
+The .NET runtime is included; Microsoft Edge WebView2 Evergreen Runtime must
+already be installed. MSIX installations remain separate from MSI installations.
+MSI updates are manual, not managed by App Installer.
+
+The output is **unsigned**; Windows may show an unknown-publisher warning.
+Sign with a trusted code-signing certificate before public distribution and
+regenerate the SHA-256 checksum after signing. Test installation, launch,
+upgrade, repair and uninstall on a clean Windows VM before publishing.
+Only `packaging/client.env` is included; root developer dotenv files are not used.
+
 ## Microsoft Store submission
 
 For Microsoft Store releases, use the identity registered in Partner Center and saved in `packaging/store-identity.json`. Do not substitute the direct-distribution identity or a local signing certificate.

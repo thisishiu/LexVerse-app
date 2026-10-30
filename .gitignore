@@ -69,6 +69,10 @@ artifacts/ocr-debug/
 *.pubxml.user
 
 # Generated Windows distribution packages
+*.msi
+*.msi.sha256
+*.wixpdb
+*.wixobj
 *.msix
 *.msixbundle
 *.appx
